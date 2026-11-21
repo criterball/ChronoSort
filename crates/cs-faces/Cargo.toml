@@ -1,0 +1,21 @@
+[package]
+name = "cs-faces"
+description = "Local face detection (YuNet) and recognition (SFace) with tract, a pure-Rust ONNX runtime. No network."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cs-model = { version = "0.1.0", path = "../cs-model" }
+cs-scan = { version = "0.1.0", path = "../cs-scan" }
+cs-thumb = { version = "0.1.0", path = "../cs-thumb" }
+rayon = "1.12.0"
+tract-onnx = "0.23"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+serde = { version = "1.0.229", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = "1"

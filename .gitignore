@@ -1,0 +1,34 @@
+# Build output (Rust, Vite, Tauri). Rebuilt from source.
+/target/
+/apps/chronosort-app/dist/
+/apps/chronosort-app/src-tauri/target/
+/apps/chronosort-app/src-tauri/gen/
+node_modules/
+
+# Ready-built programs go to GitHub Releases, never into the repository.
+/dist/
+*.exe
+*.dll
+*.zip
+
+# Downloaded at runtime by the app (on request, verified by SHA-256) - never in git:
+# AI models, llama.cpp / llama-server, ffmpeg, ONNX runtimes, etc.
+*.gguf
+*.onnx
+*.safetensors
+*.part
+/tools/
+/models/
+
+# Local databases and toolchain shims
+*.db
+*.db-wal
+*.db-shm
+/scripts/mingw-shim/
+
+# Test photos (public-domain downloads, generated corpora) stay local.
+/testdata/
+
+# Screenshots that show local model paths (retake before adding)
+/docs/screenshots/ui2/17_settings_ai_b.png
+/docs/screenshots/ui2/18_ai_downloads.png

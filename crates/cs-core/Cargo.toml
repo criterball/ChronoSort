@@ -1,0 +1,25 @@
+[package]
+name = "cs-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = "1.8.7"
+cs-date = { version = "0.1.0", path = "../cs-date" }
+cs-meta = { version = "0.1.0", path = "../cs-meta" }
+cs-model = { version = "0.1.0", path = "../cs-model" }
+cs-scan = { version = "0.1.0", path = "../cs-scan" }
+rayon = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+cs-testgen = { path = "../cs-testgen" }
+tempfile = "3.27.0"
+
+[features]
+# Pure-Rust BLAKE3 (no C/asm). Used for cross-OS compile checks from Windows.
+pure = ["blake3/pure"]

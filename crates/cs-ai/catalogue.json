@@ -1,0 +1,223 @@
+{
+ "schema": 2,
+ "comment": "AI model packs ChronoSort knows about. Verified 2026-11-20 from the Hugging Face API (size + LFS sha256 per file) and each repo's licence (model card / README). URLs are pinned to a commit so the bytes cannot change. Rules: only licences that allow commercial use and fit GPL-3.0; never InsightFace, Gemma or Llama-licensed weights. Details: research/03_model_sources.md. Programs (purpose 'engine') come from llama.cpp's official GitHub releases, pinned to a build tag, with GitHub's published SHA-256; they are unpacked into ChronoSort's own tools folder and only ever started on 127.0.0.1.",
+ "packs": [
+  {
+   "id": "faces-opencv",
+   "purpose": "faces",
+   "name": "Faces (OpenCV YuNet + SFace)",
+   "description": "Finds faces and learns who is who. Small and fast; runs well on any processor.",
+   "licence": "MIT + Apache-2.0",
+   "tier": "light",
+   "vram_gb": 0,
+   "ram_gb": 2,
+   "verified": true,
+   "files": [
+    {
+     "role": "detector",
+     "name": "face_detection_yunet_2023mar.onnx",
+     "approx_mb": 0.22,
+     "bytes": 232589,
+     "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/face_detection_yunet_2023mar.onnx",
+     "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+    },
+    {
+     "role": "recogniser",
+     "name": "face_recognition_sface_2021dec.onnx",
+     "approx_mb": 36.9,
+     "bytes": 38696353,
+     "url": "https://huggingface.co/opencv/face_recognition_sface/resolve/3d7082438a6e4551e840c9b2bb60b71e8da4b524/face_recognition_sface_2021dec.onnx",
+     "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+    }
+   ]
+  },
+  {
+   "id": "qwen3-vl-2b",
+   "purpose": "vision",
+   "name": "Qwen3-VL 2B (light)",
+   "description": "Reads printed dates and handwriting on scans. Small: also works without a graphics card (slower), and only the uncertain photos are looked at.",
+   "licence": "Apache-2.0",
+   "tier": "light",
+   "vram_gb": 3,
+   "ram_gb": 6,
+   "verified": true,
+   "files": [
+    {
+     "role": "model",
+     "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+     "approx_mb": 1056,
+     "bytes": 1107409952,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+     "sha256": "089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae"
+    },
+    {
+     "role": "projector",
+     "name": "mmproj-Qwen3VL-2B-Instruct-F16.gguf",
+     "approx_mb": 781,
+     "bytes": 819394848,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-F16.gguf",
+     "sha256": "c3d5afbef5287953acd57b4043d2269456e5761a4eaccb3b71b062996970aea5"
+    }
+   ]
+  },
+  {
+   "id": "qwen3-vl-4b",
+   "purpose": "vision",
+   "name": "Qwen3-VL 4B (standard)",
+   "description": "Better at handwriting and at guessing the era of a photo. Needs a graphics card with about 6 GB.",
+   "licence": "Apache-2.0",
+   "tier": "standard",
+   "vram_gb": 5,
+   "ram_gb": 10,
+   "verified": true,
+   "files": [
+    {
+     "role": "model",
+     "name": "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+     "approx_mb": 2382,
+     "bytes": 2497281664,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+     "sha256": "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a"
+    },
+    {
+     "role": "projector",
+     "name": "mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+     "approx_mb": 797,
+     "bytes": 836180256,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+     "sha256": "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331"
+    }
+   ]
+  },
+  {
+   "id": "qwen3-vl-8b",
+   "purpose": "vision",
+   "name": "Qwen3-VL 8B (max)",
+   "description": "The most accurate. Needs a graphics card with about 12 GB.",
+   "licence": "Apache-2.0",
+   "tier": "max",
+   "vram_gb": 9,
+   "ram_gb": 16,
+   "verified": true,
+   "files": [
+    {
+     "role": "model",
+     "name": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+     "approx_mb": 4795,
+     "bytes": 5027784800,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/f982a07559d4a2f6c8744d840bf6fccab30eea96/Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+     "sha256": "67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2"
+    },
+    {
+     "role": "projector",
+     "name": "mmproj-Qwen3VL-8B-Instruct-F16.gguf",
+     "approx_mb": 1105,
+     "bytes": 1159029824,
+     "url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/f982a07559d4a2f6c8744d840bf6fccab30eea96/mmproj-Qwen3VL-8B-Instruct-F16.gguf",
+     "sha256": "ca524100ebf825c9a870db1c580d03879e0da0ab2541697e2458e64891cf9d38"
+    }
+   ]
+  },
+  {
+   "id": "qwen3.5-9b",
+   "purpose": "vision",
+   "name": "Qwen3.5 9B (if you already have it)",
+   "description": "A general model with vision that is often already on PCs that run local AI. Good alternative to Qwen3-VL 8B.",
+   "licence": "Apache-2.0",
+   "tier": "max",
+   "vram_gb": 8,
+   "ram_gb": 16,
+   "verified": true,
+   "files": [
+    {
+     "role": "model",
+     "name": "Qwen3.5-9B-Q4_K_M.gguf",
+     "approx_mb": 5366,
+     "bytes": 5627044256,
+     "url": "https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF/resolve/1379f25c6b505a3fc737bd7818cb09389cf807c1/Qwen3.5-9B-Q4_K_M.gguf",
+     "sha256": "cd76ec205963b3b33350093e6904d9de16c4e666fd104e1f632d25c7f15f2a13"
+    },
+    {
+     "role": "projector",
+     "name": "mmproj-Qwen3.5-9B-BF16.gguf",
+     "approx_mb": 879,
+     "bytes": 921704480,
+     "url": "https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF/resolve/1379f25c6b505a3fc737bd7818cb09389cf807c1/mmproj-Qwen3.5-9B-BF16.gguf",
+     "sha256": "330d17547bfdbcd0e7a0cb3f4b06b4ceeac0aaa1e449122d9d66ef957aeb74b3"
+    }
+   ]
+  },
+  {
+   "purpose": "engine",
+   "os": "windows",
+   "unpack": true,
+   "entry": "llama-server.exe",
+   "licence": "MIT",
+   "verified": true,
+   "ram_gb": 0,
+   "id": "llama-cpp-vulkan",
+   "name": "llama.cpp b10276 (graphics card, Vulkan)",
+   "description": "The engine that runs the photo-reading models on this PC. Uses the graphics card (NVIDIA, AMD or Intel).",
+   "tier": "standard",
+   "vram_gb": 0.1,
+   "files": [
+    {
+     "role": "archive",
+     "name": "llama-b10276-bin-win-vulkan-x64.zip",
+     "approx_mb": 32.5,
+     "bytes": 34096096,
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10276/llama-b10276-bin-win-vulkan-x64.zip",
+     "sha256": "e9f0f8cd772258a1bbc3c1f39bedbb63b2ce176ddfd1d2eecdd2be65406eba70"
+    }
+   ]
+  },
+  {
+   "purpose": "engine",
+   "os": "windows",
+   "unpack": true,
+   "entry": "llama-server.exe",
+   "licence": "MIT",
+   "verified": true,
+   "ram_gb": 0,
+   "id": "llama-cpp-cpu",
+   "name": "llama.cpp b10276 (processor only)",
+   "description": "The engine that runs the photo-reading models on this PC, using only the processor. For PCs without a graphics card.",
+   "tier": "light",
+   "vram_gb": 0,
+   "files": [
+    {
+     "role": "archive",
+     "name": "llama-b10276-bin-win-cpu-x64.zip",
+     "approx_mb": 17.5,
+     "bytes": 18347005,
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10276/llama-b10276-bin-win-cpu-x64.zip",
+     "sha256": "b1db7fc5b3d2728dcead5b792b0565da045dec688df81c9272ce5aef5f55a3e8"
+    }
+   ]
+  },
+  {
+   "purpose": "helper",
+   "os": "windows",
+   "unpack": true,
+   "entry": "ffmpeg.exe",
+   "licence": "GPL-3.0",
+   "verified": true,
+   "ram_gb": 0,
+   "id": "ffmpeg",
+   "name": "FFmpeg 9.1 (previews for videos and iPhone photos)",
+   "description": "Makes previews of videos and of HEIC photos (iPhone, newer Android phones). FFmpeg build by Gyan Doshi (gyan.dev). Runs as a separate program, only on this PC, only to read the file and make a small picture. Not needed for sorting.",
+   "tier": "light",
+   "vram_gb": 0,
+   "files": [
+    {
+     "role": "archive",
+     "name": "ffmpeg-9.1-essentials_build.zip",
+     "approx_mb": 113.9,
+     "bytes": 119467219,
+     "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.1/ffmpeg-9.1-essentials_build.zip",
+     "sha256": "b9bbbb3acece000cbeec994f856649354e52c773807841e78908374b24d658fd"
+    }
+   ]
+  }
+ ]
+}

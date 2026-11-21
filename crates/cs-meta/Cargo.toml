@@ -1,0 +1,17 @@
+[package]
+name = "cs-meta"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cs-model = { version = "0.1.0", path = "../cs-model" }
+cs-platform = { version = "0.1.0", path = "../cs-platform" }
+cs-scan = { version = "0.1.0", path = "../cs-scan" }
+kamadak-exif = "0.6.2"
+quick-xml = "0.42.0"
+regex = "1.13.2"
+serde_json = "1.0.154"
+
+[lints]
+workspace = true

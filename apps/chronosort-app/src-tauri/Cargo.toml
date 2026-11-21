@@ -1,0 +1,40 @@
+[package]
+name = "chronosort-app"
+description = "ChronoSort desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ChronoSort"
+path = "src/main.rs"
+
+[dependencies]
+blake3 = "1.8.7"
+cs-ai = { version = "0.1.0", path = "../../../crates/cs-ai" }
+cs-core = { version = "0.1.0", path = "../../../crates/cs-core" }
+cs-db = { version = "0.1.0", path = "../../../crates/cs-db" }
+cs-faces = { version = "0.1.0", path = "../../../crates/cs-faces" }
+cs-vision = { version = "0.1.0", path = "../../../crates/cs-vision" }
+cs-geo = { version = "0.1.0", path = "../../../crates/cs-geo" }
+cs-exec = { version = "0.1.0", path = "../../../crates/cs-exec" }
+cs-model = { version = "0.1.0", path = "../../../crates/cs-model" }
+cs-plan = { version = "0.1.0", path = "../../../crates/cs-plan" }
+cs-platform = { version = "0.1.0", path = "../../../crates/cs-platform" }
+cs-scan = { version = "0.1.0", path = "../../../crates/cs-scan" }
+cs-thumb = { version = "0.1.0", path = "../../../crates/cs-thumb" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tauri = "2"
+tauri-plugin-dialog = "2"
+
+[build-dependencies]
+tauri-build = "2"
+
+[lints]
+workspace = true
+
+[features]
+# Embed the built UI (dist/) instead of loading the dev server. Used for release builds.
+custom-protocol = ["tauri/custom-protocol"]

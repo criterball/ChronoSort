@@ -1,0 +1,29 @@
+[package]
+name = "chronosort"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.9", features = ["derive"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+cs-ai = { version = "0.1.0", path = "../../crates/cs-ai" }
+cs-core = { version = "0.1.0", path = "../../crates/cs-core" }
+cs-db = { version = "0.1.0", path = "../../crates/cs-db" }
+cs-exec = { version = "0.1.0", path = "../../crates/cs-exec" }
+cs-faces = { version = "0.1.0", path = "../../crates/cs-faces" }
+cs-model = { version = "0.1.0", path = "../../crates/cs-model" }
+cs-plan = { version = "0.1.0", path = "../../crates/cs-plan" }
+cs-platform = { version = "0.1.0", path = "../../crates/cs-platform" }
+cs-scan = { version = "0.1.0", path = "../../crates/cs-scan" }
+cs-testgen = { version = "0.1.0", path = "../../crates/cs-testgen" }
+cs-thumb = { version = "0.1.0", path = "../../crates/cs-thumb" }
+serde_json = "1.0.154"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "chronosort-cli"
+path = "src/main.rs"

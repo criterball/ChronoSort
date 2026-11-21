@@ -1,0 +1,32 @@
+barack_obama/barack_obama_01.jpg         true 2005 (age 44)  AI age 50 -> 2011  off +6
+barack_obama/barack_obama_02.jpg         true 2005 (age 44)  AI age 50 -> 2011  off +6
+barack_obama/barack_obama_03.jpg         true 2011 (age 50)  AI age 55 -> 2016  off +5
+joe_biden/joe_biden_03.jpg               true 2021 (age 79)  AI age 78 -> 2020  off -1
+joe_biden/joe_biden_04.jpg               true 2008 (age 66)  AI age 78 -> 2020  off +12
+joe_biden/joe_biden_05.jpg               true 2013 (age 71)  AI age 78 -> 2020  off +7
+joe_biden/joe_biden_06.jpg               true 2005 (age 63)  AI age 75 -> 2017  off +12
+joe_biden/joe_biden_07.jpg               true 2005 (age 63)  AI age 75 -> 2017  off +12
+joe_biden/joe_biden_08.jpg               true 2005 (age 63)  AI age 75 -> 2017  off +12
+john_glenn/john_glenn_01.jpg             true 1962 (age 41)  AI age 35 -> 1956  off -6
+john_glenn/john_glenn_03.jpg             true 1962 (age 41)  AI age 45 -> 1966  off +4
+john_glenn/john_glenn_04.jpg             true 1998 (age 77)  AI age 80 -> 2001  off +3
+john_glenn/john_glenn_05.jpg             true 1961 (age 40)  AI age 60 -> 1981  off +20
+john_glenn/john_glenn_06.jpg             true 1961 (age 40)  AI age 65 -> 1986  off +25
+john_glenn/john_glenn_08.jpg             true 1964 (age 43)  AI age 60 -> 1981  off +17
+mark_kelly/mark_kelly_04.jpg             true 2005 (age 41)  AI age 45 -> 2009  off +4
+mark_kelly/mark_kelly_05.jpg             true 2021 (age 57)  AI age 65 -> 2029  off +8
+mark_kelly/mark_kelly_06.jpg             true 2021 (age 57)  AI age 65 -> 2029  off +8
+mark_kelly/mark_kelly_07.jpg             true 2021 (age 57)  AI age 65 -> 2029  off +8
+mark_kelly/mark_kelly_08.jpg             true 2021 (age 57)  AI age 60 -> 2024  off +3
+neil_armstrong/neil_armstrong_02.jpg     true 1969 (age 39)  AI age 45 -> 1975  off +6
+neil_armstrong/neil_armstrong_04.jpg     true 1969 (age 39)  AI age 38 -> 1968  off -1
+neil_armstrong/neil_armstrong_05.jpg     true 1969 (age 39)  AI age 40 -> 1970  off +1
+neil_armstrong/neil_armstrong_06.jpg     true 1964 (age 34)  AI age 45 -> 1975  off +11
+neil_armstrong/neil_armstrong_08.jpg     true 1966 (age 36)  AI age 45 -> 1975  off +9
+sally_ride/sally_ride_01.jpg             true 2008 (age 57)  AI age 65 -> 2016  off +8
+sally_ride/sally_ride_02.jpg             true 2008 (age 57)  AI age 60 -> 2011  off +3
+sally_ride/sally_ride_03.jpg             true 2008 (age 57)  AI age 60 -> 2011  off +3
+sally_ride/sally_ride_06.jpg             true 1978 (age 27)  AI age 25 -> 1976  off -2
+sally_ride/sally_ride_07.jpg             true 1980 (age 29)  AI age 16 -> 1967  off -13
+
+30 faces; mean error 7.9 years; within 5 years: 11/30
