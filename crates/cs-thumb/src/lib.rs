@@ -110,7 +110,11 @@ pub fn load(path: &Path, format: Format, max_side: u32) -> Result<DynamicImage, 
         {
             decode_limited(ImageReader::new(Cursor::new(j)))?
         }
-        // HEIC/AVIF: FFmpeg when it is set up (full picture), else the embedded thumbnail.
+        // HEIC: photocraft's pure-Rust decoder (cs-image): full picture, already upright, no FFmpeg needed.
+        Format::Heif if let Ok(img) = cs_image::open(path).and_then(|p| cs_image::preview_rgb8(&p.image, max_side)) => {
+            return Ok(DynamicImage::ImageRgb8(img));
+        }
+        // HEIC it could not read / AVIF: FFmpeg when it is set up (full picture), else the embedded thumbnail.
         Format::Heif | Format::Avif if external::ffmpeg_available() => match external::preview(path, max_side, false) {
             Ok(img) => return Ok(img), // FFmpeg already turned it upright
             Err(e) => match embedded {

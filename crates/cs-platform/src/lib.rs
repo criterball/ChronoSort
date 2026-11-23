@@ -15,14 +15,18 @@ use std::time::SystemTime;
 mod child;
 mod gpu;
 mod memory;
+mod recycle;
 mod rename;
 mod space;
+mod volumes;
 
 pub use child::{ChildGuard, end_with_us, prepare_child};
 pub use gpu::{Gpu, gpus};
 pub use memory::total_ram;
+pub use recycle::{BinStatus, recycle_bin};
 pub use rename::rename_no_replace;
 pub use space::free_space;
+pub use volumes::{KnownFolder, Volume, VolumeKind, known_folders, volumes};
 
 /// Timestamps of a file as read from the filesystem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

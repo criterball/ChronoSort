@@ -80,3 +80,36 @@ export const aiStop = () => invoke("ai_stop");
 export const showFacePhoto = (face) => invoke("show_face_photo", { face });
 export const faceUrl = (i) => convertFileSrc(String(i), "face");
 export const personUrl = (id, v = 0) => convertFileSrc(`${id}_${v}`, "person");
+
+// File browser. Lists names/sizes/dates only; thumbnails by listing id (never by path).
+export const browseRoots = () => invoke("browse_roots");
+export const listDir = (path, showHidden = false) => invoke("list_dir", { path, showHidden });
+export const listSubdirs = (path, showHidden = false) => invoke("list_subdirs", { path, showHidden });
+export const folderSamples = (id) => invoke("folder_samples", { id });
+export const revealItem = (id) => invoke("reveal_item", { id });
+/** size: "s" | "m" | "l" (thumbnails) or "p" (viewer preview). */
+export const fthumbUrl = (id, size = "m") => convertFileSrc(`${id}_${size}`, "fthumb");
+
+// Housekeeping (File browser). Nothing is overwritten; everything but a permanent delete can be undone.
+export const binStatus = (path) => invoke("fs_bin_status", { path });
+export const checkName = (name) => invoke("fs_check_name", { name });
+export const newFolder = (dir, name) => invoke("fs_new_folder", { dir, name });
+export const renameItem = (id, name) => invoke("fs_rename", { id, name });
+/** mode: "copy" | "move"; progress arrives as "fileop-progress" events. */
+export const transferItems = (ids, dest, mode) => invoke("fs_transfer", { ids, dest, mode });
+export const deleteItems = (ids, permanent) => invoke("fs_delete", { ids, permanent });
+export const cancelFileOp = () => invoke("fs_cancel");
+export const lastUndo = () => invoke("fs_last_undo");
+export const undoFileOp = () => invoke("fs_undo");
+
+// Viewer edits (photocraft codecs) and the information panel (ExifTool). Saves never overwrite.
+export const editOpen = (id) => invoke("edit_open", { id });
+export const editApply = (edit) => invoke("edit_apply", { edit });
+export const editStepBack = () => invoke("edit_step_back");
+export const editClose = () => invoke("edit_close");
+/** mode "copy" | "replace"; format "JPEG" | "PNG" | "TIFF" | "WebP". */
+export const editSave = (mode, format, quality, name = null) => invoke("edit_save", { mode, format, quality, name });
+export const editFormats = () => invoke("edit_formats");
+export const editUrl = (version) => convertFileSrc(String(version), "edit");
+export const metaRead = (id) => invoke("meta_read", { id });
+export const metaWrite = (id, changes) => invoke("meta_write", { id, changes });

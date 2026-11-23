@@ -14,6 +14,18 @@ static CANCEL: AtomicBool = AtomicBool::new(false);
 
 /// ExifTool comes with ChronoSort: `exiftool/exiftool.exe` next to the program.
 pub fn exiftool() -> Res<PathBuf> {
+    // Tests run from target/…/deps: use the project's own copy.
+    #[cfg(test)]
+    {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../tools/exiftool").join(if cfg!(windows) {
+            "exiftool.exe"
+        } else {
+            "exiftool"
+        });
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
     let exe = std::env::current_exe().map_err(err)?;
     let dir = exe.parent().ok_or("no program folder")?;
     let name = if cfg!(windows) { "exiftool.exe" } else { "exiftool" };

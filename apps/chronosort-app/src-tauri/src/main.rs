@@ -15,6 +15,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
+mod browse;
+mod edit;
+mod fileops;
+mod meta;
 mod people;
 mod places;
 mod portable;
@@ -41,6 +45,8 @@ struct AppState {
     faces: people::Faces,
     /// The local vision model, started on first use.
     vision: vision::Vision,
+    /// Files of recent File-browser listings (ids for `fthumb://`).
+    browse: browse::Registry,
 }
 
 type Res<T> = Result<T, String>;
@@ -368,6 +374,21 @@ async fn resolve_duplicates(
         ("trash", _) => cs_exec::DupMode::Trash,
         _ => return Err("choose where to put the extra copies".into()),
     };
+    // "Recycle Bin" must never turn into a permanent delete: on Windows a drive
+    // whose bin is switched off (or a USB stick) deletes for good.
+    if matches!(mode, cs_exec::DupMode::Trash) {
+        for a in &actions {
+            for (p, _) in &a.extras {
+                let b = cs_platform::recycle_bin(p);
+                if !b.available {
+                    return Err(format!(
+                        "{} So the extra copies cannot go to the Recycle Bin. Choose “Move them to a folder” instead.",
+                        b.reason.unwrap_or_default()
+                    ));
+                }
+            }
+        }
+    }
     let journal_dir = match &mode {
         cs_exec::DupMode::MoveTo(d) => d.clone(),
         cs_exec::DupMode::Trash => journal,
@@ -884,6 +905,7 @@ fn main() {
                 cancel: std::sync::atomic::AtomicBool::new(false),
                 faces: Mutex::new(None),
                 vision: vision::Vision::default(),
+                browse: browse::Registry::default(),
             });
             Ok(())
         })
@@ -897,6 +919,16 @@ fn main() {
             let app = ctx.app_handle().clone();
             let path = req.uri().path().to_string();
             std::thread::spawn(move || responder.respond(thumb_response(&app, &path, cs_thumb::PREVIEW_SIZE)));
+        })
+        // The picture being edited in the viewer (the number only defeats caching).
+        .register_asynchronous_uri_scheme_protocol("edit", |_ctx, _req, responder| {
+            std::thread::spawn(move || responder.respond(edit::edit_response()));
+        })
+        // File browser thumbnails: only files handed out by recent listings (ids, never paths).
+        .register_asynchronous_uri_scheme_protocol("fthumb", |ctx, req, responder| {
+            let app = ctx.app_handle().clone();
+            let path = req.uri().path().to_string();
+            std::thread::spawn(move || responder.respond(browse::fthumb_response(&app, &path)));
         })
         // Face crops of the current face search, and stored pictures of named people.
         .register_asynchronous_uri_scheme_protocol("face", |ctx, req, responder| {
@@ -929,6 +961,28 @@ fn main() {
             download_pack,
             cancel_download,
             delete_model_files,
+            browse::browse_roots,
+            browse::list_dir,
+            browse::list_subdirs,
+            browse::folder_samples,
+            browse::reveal_item,
+            fileops::fs_bin_status,
+            fileops::fs_check_name,
+            fileops::fs_new_folder,
+            fileops::fs_rename,
+            fileops::fs_transfer,
+            fileops::fs_delete,
+            fileops::fs_cancel,
+            fileops::fs_last_undo,
+            fileops::fs_undo,
+            edit::edit_open,
+            edit::edit_apply,
+            edit::edit_step_back,
+            edit::edit_close,
+            edit::edit_save,
+            edit::edit_formats,
+            meta::meta_read,
+            meta::meta_write,
             people::find_faces,
             people::suggest_person,
             people::save_person,

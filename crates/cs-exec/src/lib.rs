@@ -162,7 +162,9 @@ fn check_roots(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-enum CopyResult {
+/// Result of [`copy_verified`].
+#[derive(Debug)]
+pub enum CopyResult {
     Copied { hash: String, warning: Option<String> },
     AlreadyPresent,
 }
@@ -211,7 +213,7 @@ fn hash_reader(mut r: impl Read, mut sink: Option<&mut File>) -> io::Result<(Str
 }
 
 /// The verified copy. `dst` must not exist; it is never overwritten.
-fn copy_verified(src: &Path, dst: &Path) -> io::Result<CopyResult> {
+pub fn copy_verified(src: &Path, dst: &Path) -> io::Result<CopyResult> {
     let before = fs::metadata(src)?;
     let times: Times = read_times(src)?;
     if dst.exists() {

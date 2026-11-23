@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Only what the ChronoSort UI needs: its own commands, events, and the folder picker.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save", "dialog:allow-ask", "dialog:allow-message", "core:webview:allow-set-webview-zoom"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save", "dialog:allow-ask", "dialog:allow-message", "core:webview:allow-set-webview-zoom", "core:window:allow-set-fullscreen", "core:window:allow-is-fullscreen", "core:window:allow-minimize"]
 }

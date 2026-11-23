@@ -143,6 +143,56 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
 
+## 2026-11-23
+- `scripts/check.sh` passes (fmt, clippy, all tests, linux/mac checks, audit). Release build → `dist/ChronoSort.exe` (starts OK).
+- EXIF panel: a town picked from the offline list now also writes City / State / Country / CountryCode (same tags as Add a place); ✕ removes the position and the names. Typing coordinates by hand leaves existing names alone. Unit test + real ExifTool round trip cover it. Not yet in dist (built after the release build).
+- `docs/screenshots/browser/` is git-ignored: some shots show local folders or a real portrait (portrait.jpg). Retake with generated test images before publishing.
+- Pushed to criterball/ChronoSort at the user's request.
+
+## PAUSED 2026-11-22 late (user: "stop for today")
+- **Nothing committed or pushed.** The user asked about pushing, then decided to stop. The repo belongs to the **criterball** account (remote criterball/ChronoSort, commits as criterball's noreply). Before pushing, `gh auth switch` to criterball. Keep out `docs/screenshots/browser/01_thumbs_m.png` and `02_delete_no_bin.png`: they show the dev PC's own folders. Push only when the user says go.
+- **Last fixes, not yet re-verified by a full check.sh:** clippy items in cs-image + fileops (test helpers moved before `mod tests`, collapsed if). `cargo clippy -D warnings` was clean afterwards; the final `cargo test --workspace` run was stopped before it finished. Next session: run `scripts/check.sh`, then the release build → `dist/ChronoSort.exe` (+ exiftool folder).
+- **Latest UI changes, tested in the debug app:**
+  - The viewer's top fly-out is taller (165×120 thumbnails with names, follows the current photo).
+  - The bottom toolbar is fixed: it was renamed from `.bar` to `.vbar` because the global progress-bar `.bar` squashed it to 8 px.
+  - Viewer window buttons: minimise (leaves full screen first, since Windows ignores minimise on a full-screen window, and returns to full screen on focus), restore / full screen toggle, close = back to the browser.
+- The Vite dev server was stopped. If the debug app looks stale, kill any node on port 5173 and start `npx vite --force`.
+
+## In progress 2026-11-22: File browser = start screen (FastStone-style look; nothing committed)
+Plan: `~/.claude/plans/encapsulated-painting-hopcroft-*.md`. Clean-room study: `docs/ui-reference/FASTSTONE_STUDY.md` (screenshots git-ignored in docs/ui-reference/shots). User decisions: the app opens in Browse (old Home tiles = "Tools"), all files shown, Thumbnails S/M/L + Tiles/List/Details, housekeeping incl. permanent delete + Undo, photocraft (craft-libs, MIT/Apache) for image code only, v1 edits = rotate/flip, crop, resize, Save As + EXIF panel with edit mode; nice-to-haves chosen at the end.
+- **Done + tested:**
+  - `cs_platform::volumes()/known_folders()` (Windows/Linux/macOS, compile-checked for linux + mac).
+  - `cs_platform::recycle_bin(path)`: policy NoRecycleFiles, drive type (removable/network/CD have no bin), per-volume `BitBucket\Volume\{GUID}\NukeOnDelete`. **On the dev PC C: and D: have the bin switched OFF and E: is removable**, so only "Delete permanently" is offered there (user's request). Verified against `mountvol` + registry.
+  - `src-tauri/src/browse.rs`: list_dir (no content reads, 10 000 files < 1 s), list_subdirs, folder_samples, reveal_item, `fthumb://<id>_<s|m|l|p>` (ids only, never paths; cache key = blake3(path+len+mtime)).
+  - `src-tauri/src/fileops.rs`: new folder, rename (name check incl. Windows reserved names), copy/move (never overwrite, " (2)" names, other drive = `cs_exec::copy_verified` then remove the original), Recycle Bin (only where available) / permanent delete, guards (drive roots, system/program folders, app data, own folder), undo stack (copies: removes only unchanged copies). 10 unit tests.
+  - **Bug fixed (pre-existing):** Find duplicates "Recycle Bin" would have deleted for good on drives with the bin off. Backend now refuses with the reason; the UI option is disabled with an explanation.
+  - UI: `Browser.svelte` (tree + preview + views + status bar + right-click + keys + drag-and-drop + job overlay), `TreeNode.svelte`, `ContextMenu.svelte`, `Viewer.svelte` (full screen, wheel/arrows, zoom, fly-outs left/right/top), `Icon.svelte` (own icons), `lib/paths.js`. App starts in Browse; header Browse + Tools; Esc → Browse, Ctrl+B, Ctrl+T.
+  - Click-tested in the debug app (cdp + `temp/fs_ops_test`): rename (stem selected, "con.txt" refused), F8 new folder, Ctrl+C/V twice → " (2)" copies, Ctrl+Z, cut folder + paste + undo, Del with bin off → permanent dialog → deleted. Screenshots docs/screenshots/browser/.
+- **Viewer + edits + EXIF (later the same evening):**
+  - **Fly-outs:** user feedback: "Esc must return to the normal interface"; FastStone's bottom edge has the zoom/navigation toolbar (`shots/15_fs_bottom.png`; the pointer must touch the last pixel row).
+    - Viewer.svelte now has 4 fly-outs: left = edit actions/forms, right = InfoPanel (EXIF / All tags / ✎ Edit), top = thumbnail strip, bottom = prev/next, "n / N", zoom −/%/+, 1:1, fit, rotate, crop, resize, save, info, exit, plus a Navigator mini-map when zoomed.
+    - The **Tauri window** goes full screen (`core:window:allow-set-fullscreen`), not DOM fullscreen, so Esc reaches the viewer and returns to the browser (tested).
+  - **`crates/cs-image`:** photocraft's `craft-image-codecs` + `craft-heif`, pinned rev (review: `third_party/photocraft-craft-libs.md`).
+    - Open (upright), rotate/flip/crop/resize, save (never overwrites), lossless JPEG orientation math. 6 tests incl. real HEIC.
+    - cs-thumb now decodes HEIC with it (no FFmpeg needed).
+  - **`src-tauri/src/edit.rs`:**
+    - Edit session plus `edit://` preview.
+    - Save as copy (`<name>_edited.<ext>`) or replace. Replace keeps the original in `<folder>/.chronosort/edit-originals/<run>/` (not the Recycle Bin: works on every PC and Undo is reliable).
+    - JPEG turn/flip-only edits are saved losslessly via the ExifTool Orientation tag. The original's file dates are kept.
+  - **`src-tauri/src/meta.rs`:**
+    - ExifTool read (all tags, `-G1`). Note: no `-q`, because it hides `{ready}` and caused a 60 s hang (fixed).
+    - Write date taken / title / description / keywords / author / copyright / GPS (offline place search) with a verified backup in `.chronosort/info-backups/` and Undo.
+  - fileops got `Undo::Replaced` + `Undo::MetaEdited`. Tests share the history behind `TEST_LOCK`; `places::exiftool()` uses `../tools/exiftool` in tests.
+  - **App tests:** 19 pass. Real ExifTool round trip: write + undo is byte-identical. Lossless turn + crop/replace + undo is byte-identical.
+  - **Click-tested in the app:** R R + Ctrl+S → lossless `portrait_edited.jpg` with the original time; crop 1:1 → 768×768; EXIF edit (title, keywords, Adelaide via place search) verified with ExifTool. Screenshots `docs/screenshots/browser/03–08`.
+  - Help: new section "Browsing, viewing and editing" + shortcut groups. The Tools page has a Browse tile.
+- **Not yet:**
+  - Recycle-Bin path untested on a drive that has a bin (none on this PC).
+  - Writing the city/country names when a town is picked in the EXIF panel (only GPS is written now).
+  - Zoom % is relative to the 1280 px preview, not the full-size picture.
+  - A fuzz target for cs-image.
+  - Release build + dist; nice-to-have list for the user (in FASTSTONE_STUDY.md §7).
+
 ## Next (cleaned up 2026-11-21; done items removed)
 1. Test portable mode on a real USB stick (another PC if possible).
 2. Remember Check decisions (resolutions) so a long review survives closing the app.
@@ -151,7 +201,7 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
 5. Places, more: "general location" (region/area without a town), map preview, places for videos tested on real MP4/MOV.
 6. Linux and macOS builds + testing (only compile-checked so far); Windows installer / release.
 7. Small: "Forget everyone" in People; find faces right after Sort analysis; folder-open button after a run; light-theme check; idle timeout for stalled downloads; rustls-platform-verifier; Linux/macOS child-process guard; more date sources (iPhone QuickTime creationdate, XMP in JPEG, Takeout truncated names); near-duplicates.
-8. Git: the repo has NO commits yet (user decides when). Before any publishing: retake screenshots that show local paths.
+8. Git: published 2026-11-21 as https://github.com/criterball/ChronoSort (public, commits as criterball). Screenshots ui2/17 + 18 are kept out by .gitignore (local model paths): retake them before adding. Commit/push only when the user asks.
 
 ## New request (2026-11-20 15:52): AI models in Settings
 The user wants Settings to **suggest AI models that fit this PC** and offer **download** etc.

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import Home from "./components/Home.svelte";
+  import Browser from "./components/Browser.svelte";
   import SortFlow from "./components/SortFlow.svelte";
   import Duplicates from "./components/Duplicates.svelte";
   import People from "./components/People.svelte";
@@ -12,7 +13,7 @@
   import { prefs, applyPrefs, SIZES } from "./lib/prefs.svelte.js";
   import { exitApp, confirmBox, startupArgs, onProgress } from "./lib/api.js";
 
-  const TITLES = { sort: "Sort into year folders", dups: "Find duplicates", people: "People", places: "Add a place", settings: "Settings", help: "Help" };
+  const TITLES = { home: "Tools", browse: "Browse files", sort: "Sort into year folders", dups: "Find duplicates", people: "People", places: "Add a place", settings: "Settings", help: "Help" };
 
   // Apply theme/font now and whenever they change; text size uses real page zoom
   // so every layout scales cleanly.
@@ -48,7 +49,7 @@
     if (view === app.view) return;
     // Settings and Help are safe to open at any time; a running job keeps
     // running and its screen is kept.
-    if (app.busy && !(view === "settings" || view === "help" || view === "home")) {
+    if (app.busy && !(view === "settings" || view === "help" || view === "home" || view === "browse")) {
       say("Please wait until the current job has finished.");
       return;
     }
@@ -79,10 +80,13 @@
     const k = e.key;
     let handled = true;
     if (k === "F1") go("help");
-    else if (k === "Escape" && !document.querySelector("dialog[open]")) {
-      if (app.view !== "home") go("home");
+    else if (k === "Escape" && !document.querySelector("dialog[open], .viewer, .menu, .jobwrap")) {
+      // Esc goes back to the File browser (the start screen); it never closes the app.
+      if (app.view !== "browse") go("browse");
       else handled = false;
-    } else if (e.altKey && k === "Home") go("home");
+    } else if (e.altKey && k === "Home") go("browse");
+    else if (ctrl && (k === "b" || k === "B")) go("browse");
+    else if (ctrl && (k === "t" || k === "T")) go("home");
     else if (ctrl && k === ",") go("settings");
     else if (ctrl && (k === "q" || k === "Q")) exit();
     else if (ctrl && k === "1") go("sort");
@@ -104,7 +108,7 @@
 
 <div class="shell">
   <header>
-    <button class="brand ghost" onclick={() => go("home")} title="Main menu (Esc)">
+    <button class="brand ghost" onclick={() => go("browse")} title="Browse files (Esc)">
       <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
         <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--accent)" />
         <circle cx="16" cy="16" r="8.5" fill="none" stroke="var(--accent-text)" stroke-width="2.2" />
@@ -112,7 +116,7 @@
       </svg>
       <span>ChronoSort</span>
     </button>
-    {#if app.view !== "home"}<span class="where">{TITLES[app.view]}</span>{/if}
+    {#if app.view !== "browse"}<span class="where">{TITLES[app.view]}</span>{/if}
     <span class="spacer"></span>
     {#if dl.pack}
       {@const p = dl.prog}
@@ -125,8 +129,11 @@
     {:else if app.busy}<span class="chip amber"><span class="spin" aria-hidden="true"></span> Working…</span>{/if}
     <span class="chip green" title="Your photos and videos never leave this PC, and the AI runs on this PC. The internet is only used if you choose to download an AI model.">🔒 Photos stay on this PC</span>
     <nav class="row" aria-label="Main">
-      <button class="hbtn" class:on={app.view === "home"} onclick={() => go("home")} title="Main menu (Esc)">
-        <span aria-hidden="true">⌂</span> Home
+      <button class="hbtn" class:on={app.view === "browse"} onclick={() => go("browse")} title="Browse files (Esc, Ctrl+B)">
+        <span aria-hidden="true">🗀</span> Browse
+      </button>
+      <button class="hbtn" class:on={app.view === "home"} onclick={() => go("home")} title="Tools: sort, duplicates, people, places (Ctrl+T)">
+        <span aria-hidden="true">▦</span> Tools
       </button>
       <button class="hbtn" class:on={app.view === "help"} onclick={() => go("help")} title="Help (F1)">
         <span aria-hidden="true">?</span> Help
@@ -144,6 +151,7 @@
 
   <main>
     <!-- The sort and duplicate screens stay mounted (hidden) so a running job keeps its screen. -->
+    <div class="view fill" hidden={app.view !== "browse"}><Browser {go} active={app.view === "browse"} /></div>
     <div class="view" hidden={app.view !== "home"}><Home {go} /></div>
     <div class="view" hidden={app.view !== "sort"}><SortFlow active={app.view === "sort"} /></div>
     <div class="view" hidden={app.view !== "dups"}><Duplicates active={app.view === "dups"} /></div>
@@ -179,4 +187,7 @@
   }
   main { flex: 1; overflow: auto; }
   .view[hidden] { display: none; }
+  /* The File browser fills the window and scrolls inside its own panes. */
+  main:has(> .fill:not([hidden])) { overflow: hidden; display: flex; flex-direction: column; }
+  .view.fill { flex: 1; min-height: 0; }
 </style>

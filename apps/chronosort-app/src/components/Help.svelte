@@ -1,6 +1,7 @@
 <script>
   const SECTIONS = [
     ["start", "Getting started"],
+    ["browse", "Browsing, viewing and editing"],
     ["sort", "Sorting into year folders"],
     ["check", "Uncertain dates"],
     ["names", "File names"],
@@ -14,7 +15,8 @@
   ];
   const SHORTCUTS = [
     ["F1", "Open this help"],
-    ["Esc  or  Alt+Home", "Back to the main menu"],
+    ["Esc  or  Ctrl+B", "Back to the File browser (the start screen)"],
+    ["Ctrl+T", "Tools (sort, duplicates, people, places)"],
     ["Ctrl+1", "Sort photos into year folders"],
     ["Ctrl+2", "Find duplicates"],
     ["Ctrl+3", "People"],
@@ -24,6 +26,21 @@
     ["Ctrl+Enter", "Continue to the next step (the main blue button)"],
     ["Enter (in a year box)", "Confirm that year for the photo"],
     ["Tab / Shift+Tab", "Move between buttons and fields"],
+    ["— File browser —", ""],
+    ["Enter  or  double-click", "Open a folder, or view a photo full screen"],
+    ["Backspace  /  Alt+←  /  Alt+→", "Up one folder / back / forward"],
+    ["F2  /  F8", "Rename  /  New folder"],
+    ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, paste (never overwrites: a clash gets “(2)”)"],
+    ["Del  /  Shift+Del", "Delete (Recycle Bin where the drive has one)  /  Delete permanently"],
+    ["Ctrl+Z", "Undo the last change"],
+    ["F5", "Refresh"],
+    ["— Full-screen viewer —", ""],
+    ["← →  or  mouse wheel", "Previous / next photo"],
+    ["0  /  1  /  +  /  −", "Fit / actual size / zoom in / zoom out (Ctrl+wheel zooms too)"],
+    ["L  R  H  V", "Rotate left / right, flip left–right / upside down"],
+    ["X  /  Ctrl+R  /  Ctrl+S", "Crop / Resize / Save as"],
+    ["I", "Information (EXIF), with an Edit button"],
+    ["Esc", "Back to the browser"],
   ];
   const jump = (id) => document.getElementById("help-" + id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 </script>
@@ -40,13 +57,22 @@
 
     <section id="help-start">
       <h2>Getting started</h2>
-      <p>The main menu has three jobs:</p>
+      <p>ChronoSort opens in the <strong>File browser</strong>: your drives and folders on the left, the files on the right. Look through your photos there, tidy up, and right-click a folder to sort it. The <strong>Tools</strong> button at the top has the big jobs:</p>
       <ul>
         <li><strong>Sort photos into year folders</strong> copies your photos and videos into folders named after the year they were taken, such as <span class="mono">2005</span> and <span class="mono">2006</span>.</li>
         <li><strong>Find duplicates</strong> finds files that are exactly the same and helps you tidy up the extra copies.</li>
         <li><strong>People</strong> finds the faces in your photos so you can name the people in them.</li>
       </ul>
-      <p>You can go back to the main menu at any time with the <strong>Home</strong> button at the top, or the Esc key. The red <strong>Exit</strong> button closes ChronoSort.</p>
+      <p>You can go back to the browser at any time with the <strong>Browse</strong> button at the top, or the Esc key. The red <strong>Exit</strong> button closes ChronoSort.</p>
+    </section>
+
+    <section id="help-browse">
+      <h2>Browsing, viewing and editing</h2>
+      <p>The browser shows <strong>all</strong> files, so nothing gets missed. Choose <em>Photos &amp; videos</em> at the top to see only those. The buttons <strong>S</strong>, <strong>M</strong> and <strong>L</strong> change the thumbnail size; Tiles, List and Details show more about each file.</p>
+      <p><strong>Right-click a folder</strong> to sort it into years, find duplicates, people, or add a place. Right-click files for copy, move, rename and delete. Everything can be undone with Ctrl+Z, except <em>Delete permanently</em>.</p>
+      <p><strong>Recycle Bin:</strong> ChronoSort checks every drive first. If the Recycle Bin is switched off for that drive, or it is a USB stick, memory card or network drive (which have none), only <em>Delete permanently</em> is offered, with a clear warning, because a “Recycle Bin” delete would really be permanent there.</p>
+      <p><strong>Full-screen viewer:</strong> double-click a photo. Move the mouse to an edge of the screen: <em>left</em> = edit (rotate, flip, crop, resize, save), <em>right</em> = information (EXIF, with an Edit button), <em>top</em> = all photos of the folder, <em>bottom</em> = previous/next and zoom. Esc goes back.</p>
+      <p><strong>Saving edits:</strong> by default a new copy is made next to the original. A JPEG that was only turned or flipped is saved without any quality loss. If you choose <em>Replace the original</em>, the original is kept in a hidden <span class="mono">.chronosort</span> folder next to it, so Ctrl+Z can bring it back. Changing information (date, title, keywords, place) keeps a safety copy the same way.</p>
     </section>
 
     <section id="help-sort">
@@ -130,7 +156,7 @@
       <table>
         <tbody>
           {#each SHORTCUTS as [k, what]}
-            <tr><td><kbd>{k}</kbd></td><td>{what}</td></tr>
+            {#if what === ""}<tr><th colspan="2" class="grp">{k.replace(/—/g, "").trim()}</th></tr>{:else}<tr><td><kbd>{k}</kbd></td><td>{what}</td></tr>{/if}
           {/each}
         </tbody>
       </table>
@@ -154,6 +180,7 @@
 </div>
 
 <style>
+  .grp { text-align: left; padding-top: 14px; font-size: 15px; }
   .layout { display: grid; grid-template-columns: 230px 1fr; gap: 28px; max-width: 1100px; margin: 0 auto; padding: 24px; }
   .toc { position: sticky; top: 16px; align-self: start; display: grid; gap: 2px; }
   .toc button { text-align: left; padding: 8px 12px; }

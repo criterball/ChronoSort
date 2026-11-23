@@ -16,6 +16,7 @@ cs-core = { version = "0.1.0", path = "../../../crates/cs-core" }
 cs-db = { version = "0.1.0", path = "../../../crates/cs-db" }
 cs-faces = { version = "0.1.0", path = "../../../crates/cs-faces" }
 cs-vision = { version = "0.1.0", path = "../../../crates/cs-vision" }
+cs-image = { version = "0.1.0", path = "../../../crates/cs-image" }
 cs-geo = { version = "0.1.0", path = "../../../crates/cs-geo" }
 cs-exec = { version = "0.1.0", path = "../../../crates/cs-exec" }
 cs-model = { version = "0.1.0", path = "../../../crates/cs-model" }
@@ -26,11 +27,12 @@ cs-thumb = { version = "0.1.0", path = "../../../crates/cs-thumb" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-tauri = "2"
+tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+trash = "5.4.0"
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
 
 [lints]
 workspace = true
@@ -38,3 +40,6 @@ workspace = true
 [features]
 # Embed the built UI (dist/) instead of loading the dev server. Used for release builds.
 custom-protocol = ["tauri/custom-protocol"]
+
+[dev-dependencies]
+tempfile = "3"

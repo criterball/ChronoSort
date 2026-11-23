@@ -27,6 +27,7 @@
   });
 
   const tiles = [
+    { view: "browse", icon: "📂", title: "Browse files", text: "Look through your drives and folders, view and edit photos, tidy up.", key: "Ctrl+B" },
     { view: "sort", icon: "cal", title: "Sort photos into year folders", text: "Copy photos and videos into folders like 2005, 2006 … by the date they were taken.", key: "Ctrl+1" },
     { view: "dups", icon: "dup", title: "Find duplicates", text: "Find identical copies of the same photo and decide what to do with the extras.", key: "Ctrl+2" },
     { view: "people", icon: "ppl", title: "People", text: "Name the people in your photos. ChronoSort learns their faces, on this PC only.", key: "Ctrl+3" },
@@ -62,7 +63,7 @@
 
   <div class="tiles">
     {#each tiles as t, i}
-      <button class="tile card" class:main={i < 2} onclick={() => go(t.view)}>
+      <button class="tile card" class:main={t.view === "sort" || t.view === "dups"} onclick={() => go(t.view)}>
         <span class="icon" aria-hidden="true">
           {#if t.icon === "cal"}
             <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17.5h2M11 17.5h2"/></svg>

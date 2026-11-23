@@ -2,7 +2,7 @@
   import {
     pickFolder, pickSaveFile, confirmBox, findDuplicates, resolveDuplicates, saveDuplicateReport,
     undoDuplicates, openFolder, showDuplicate, onProgress, thumbUrl, previewUrl, formatBytes, plural,
-    baseName, parentDir, joinPath,
+    baseName, parentDir, joinPath, binStatus,
   } from "../lib/api.js";
   import { app, dups, resetDups } from "../lib/state.svelte.js";
 
@@ -19,6 +19,17 @@
   let typed = $state("");
 
   let cur = $derived(dups.scan?.groups[sel] ?? null);
+  // The Recycle Bin option only where the drive has one (on Windows a switched-off bin deletes for good).
+  let binOff = $state("");
+  $effect(() => {
+    const f = dups.folders.slice();
+    Promise.all(f.map((p) => binStatus(p).catch(() => ({ available: false, reason: "could not check the Recycle Bin" }))))
+      .then((bs) => {
+        const no = bs.find((b) => !b.available);
+        binOff = no ? no.reason : "";
+        if (binOff && dups.action === "trash") dups.action = "move";
+      });
+  });
 
   const defaultTarget = () =>
     dups.folders.length ? joinPath(parentDir(dups.folders[0]), baseName(dups.folders[0]) + " duplicates") : "";
@@ -289,9 +300,12 @@
             </div>
           </div>
         </label>
-        <label class="opt" class:on={dups.action === "trash"}>
-          <input type="radio" bind:group={dups.action} value="trash" />
-          <div><strong>Put them in the Recycle Bin</strong> <span class="muted">frees {formatBytes(freed)}</span></div>
+        <label class="opt" class:on={dups.action === "trash"} class:off={binOff}>
+          <input type="radio" bind:group={dups.action} value="trash" disabled={!!binOff} />
+          <div>
+            <strong>Put them in the Recycle Bin</strong> <span class="muted">frees {formatBytes(freed)}</span>
+            {#if binOff}<div class="muted small">Not possible here: {binOff}</div>{/if}
+          </div>
         </label>
         <label class="opt" class:on={dups.action === "report"}>
           <input type="radio" bind:group={dups.action} value="report" />
@@ -399,6 +413,8 @@
   .decide { padding: 18px 22px; display: grid; gap: 10px; }
   .opt { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
   .opt.on { border-color: var(--accent); background: var(--accent-soft); }
+  .opt.off { opacity: 0.6; cursor: not-allowed; }
+  .small { font-size: 13px; margin-top: 2px; }
   .opt input[type="radio"] { margin-top: 4px; }
   .target { margin-top: 8px; }
   .target input { flex: 1; }

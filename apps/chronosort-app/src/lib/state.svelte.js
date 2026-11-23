@@ -2,7 +2,7 @@
 // in progress survives a visit to Settings or Help.
 
 export const app = $state({
-  view: "home", // home | sort | dups | people | places | settings | help
+  view: "browse", // browse (start) | home (Tools) | sort | dups | people | places | settings | help
   busy: false, // a job is running: block navigation that would lose it
   helpTopic: null,
 });
@@ -103,3 +103,34 @@ export function resetPlaces() {
 export function resetPeople() {
   Object.assign(people, { phase: "pick", result: null, groups: [], showSingles: false });
 }
+
+// File browser (the start screen). View choices are remembered between runs.
+const BKEY = "chronosort.browser.v1";
+const BDEF = { view: "thumbs", size: "m", show: "all", sortBy: "name", sortDesc: false, treeSide: "left", preview: true, showHidden: false, last: "" };
+function loadBrowserPrefs() {
+  try {
+    return { ...BDEF, ...JSON.parse(localStorage.getItem(BKEY) ?? "{}") };
+  } catch {
+    return { ...BDEF };
+  }
+}
+export const bprefs = $state(loadBrowserPrefs());
+export function saveBrowserPrefs() {
+  try {
+    localStorage.setItem(BKEY, JSON.stringify(bprefs));
+  } catch {
+    /* not saved: still works this session */
+  }
+}
+
+export const browser = $state({
+  path: "", // current folder ("" = "This PC")
+  listing: null, // list_dir result
+  loading: false,
+  error: "",
+  back: [],
+  forward: [],
+  selected: [], // entry ids
+  anchor: null, // id for Shift-click ranges
+  filter: "", // name filter (search box)
+});

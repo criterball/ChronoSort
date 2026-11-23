@@ -32,3 +32,9 @@ node_modules/
 # Screenshots that show local model paths (retake before adding)
 /docs/screenshots/ui2/17_settings_ai_b.png
 /docs/screenshots/ui2/18_ai_downloads.png
+
+# FastStone clean-room study screenshots (third-party UI, private, never published)
+/docs/ui-reference/shots/
+
+# Browser/viewer screenshots: some show local folders or a real portrait; retake with test images before publishing
+/docs/screenshots/browser/
