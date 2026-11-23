@@ -4,7 +4,7 @@
   import InfoPanel from "./InfoPanel.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
-    fthumbUrl, revealItem, formatBytes, confirmBox,
+    fthumbUrl, revealItem, formatBytes, confirmBox, imageSize,
     editOpen, editApply, editStepBack, editClose, editSave, editUrl,
   } from "../lib/api.js";
 
@@ -17,7 +17,9 @@
   let cur = $derived(items[i]);
   let el = $state();
   let natural = $state({ w: 0, h: 0 });
-  let zoom = $state(0); // 0 = fit, otherwise the scale of the shown image
+  let zoom = $state(0); // 0 = fit, otherwise the scale of the shown image (preview or original)
+  let fullSize = $state(null); // { w, h, original } of the real picture, from its header
+  let hiRes = $state(false); // showing the original file instead of the preview (after zooming in)
   let pan = $state({ x: 0, y: 0 });
   let edge = $state(""); // fly-out under the pointer: left | right | top | bottom
   let pinned = $state(""); // a fly-out kept open while working in it
@@ -115,9 +117,17 @@
     await dropEdits();
     i = (n + items.length) % items.length;
     zoom = 0;
+    hiRes = false;
     pan = { x: 0, y: 0 };
     failed = false;
   }
+  // Real size of the current picture (header read; no decoding).
+  $effect(() => {
+    const id = cur?.id;
+    fullSize = null;
+    if (id == null) return;
+    imageSize(id).then((r) => { if (cur?.id === id) fullSize = r; }).catch(() => {});
+  });
   const next = () => show(i + 1);
   const prev = () => show(i - 1);
   let closing = false;
@@ -132,12 +142,39 @@
     if (!el || !natural.w) return 1;
     return Math.min(1, el.clientWidth / natural.w, el.clientHeight / natural.h);
   }
+  // The real picture's size, upright like the shown image (an EXIF turn swaps the stored size).
+  let real = $derived.by(() => {
+    if (edit) return { w: edit.width, h: edit.height };
+    if (!fullSize || !natural.w) return null;
+    const { w, h } = fullSize;
+    return natural.w > natural.h !== w > h && natural.w !== natural.h ? { w: h, h: w } : { w, h };
+  });
+  // `zoom` scales the shown image in CSS pixels; 100 % means one SCREEN pixel per real
+  // pixel. zoom 1.0 on a 1280 px preview of a 4000 px photo is only 32 % of the real
+  // picture, and Windows display scaling (devicePixelRatio) enlarges every CSS pixel.
+  let dpr = $state(window.devicePixelRatio || 1);
+  let scaleF = $derived((real && natural.w ? real.w / natural.w : 1) / dpr);
   function setZoom(z) {
-    zoom = Math.min(8, Math.max(0.05, z));
+    zoom = Math.min(8 * scaleF, Math.max(0.02, z));
+    // Past the preview's own pixels: load the original so the picture stays sharp.
+    if (!edit && !hiRes && fullSize?.original && real && real.w > natural.w * 1.01 && zoom * dpr > 1.001) hiRes = true;
   }
+  $effect(() => {
+    const upd = () => (dpr = window.devicePixelRatio || 1); // another monitor / scaling change
+    window.addEventListener("resize", upd);
+    return () => window.removeEventListener("resize", upd);
+  });
   const zoomBy = (f) => setZoom((zoom || fitScale()) * f);
+  const actualSize = () => setZoom(scaleF);
   const fit = () => { zoom = 0; pan = { x: 0, y: 0 }; };
-  let pct = $derived(natural.w ? Math.round(100 * (zoom || fitScale())) : 0);
+  // Percent of the REAL picture, not of the preview.
+  let pct = $derived(natural.w ? Math.round((100 * (zoom || fitScale())) / scaleF) : 0);
+  function imgLoaded(e) {
+    const nw = e.currentTarget.naturalWidth, nh = e.currentTarget.naturalHeight;
+    // Same picture at another resolution (preview -> original): keep the same view.
+    if (zoom && natural.w && nw !== natural.w) zoom = (zoom * natural.w) / nw;
+    natural = { w: nw, h: nh };
+  }
 
   // ---------- edits ----------
   async function ensureEdit() {
@@ -314,7 +351,7 @@
     else if (k === "Home") show(0);
     else if (k === "End") show(items.length - 1);
     else if (k === "0" || k === "b" || k === "B") fit();
-    else if (k === "1" || k === "a" || k === "A") setZoom(1);
+    else if (k === "1" || k === "a" || k === "A") actualSize();
     else if (k === "+" || k === "=") zoomBy(1.25);
     else if (k === "-") zoomBy(0.8);
     else if (k === "i" || k === "I") pinned = pinned === "right" ? "" : "right";
@@ -373,7 +410,7 @@
     pan = { x: -(fx - 0.5) * natural.w * zoom, y: -(fy - 0.5) * natural.h * zoom };
   }
 
-  let src = $derived(edit ? editUrl(`${cur.id}-${edit.version}`) : cur ? fthumbUrl(cur.id, "p") : "");
+  let src = $derived(edit ? editUrl(`${cur.id}-${edit.version}`) : cur ? fthumbUrl(cur.id, hiRes ? "o" : "p") : "");
   let pre = $derived(items.length > 1 ? [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]] : []);
   const ZOOMS = [10, 25, 50, 75, 100, 150, 200, 300, 400];
 </script>
@@ -386,13 +423,13 @@
     {#if !failed}
       <img bind:this={imgEl} class="photo" class:fit={!zoom} {src} alt={cur.name} draggable="false"
         style={zoom ? `transform: translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom}); width:${natural.w}px; height:${natural.h}px` : ""}
-        onload={(e) => (natural = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-        onerror={() => (failed = true)} />
+        onload={imgLoaded}
+        onerror={() => (hiRes ? (hiRes = false) : (failed = true))} />
     {:else}
       <div class="nopic"><Icon name={cur.kind} size={96} /><p>No preview for this file yet.</p></div>
     {/if}
     <div class="info">
-      {cur.name} &nbsp;( {edit ? `${edit.width} × ${edit.height}` : natural.w ? `${natural.w} × ${natural.h} preview` : "…"}, {formatBytes(cur.size)} ) &nbsp;[ {i + 1} / {items.length} ] &nbsp;{pct ? pct + "%" : ""}
+      {cur.name} &nbsp;( {real ? `${real.w} × ${real.h}` : natural.w ? `${natural.w} × ${natural.h} preview` : "…"}, {formatBytes(cur.size)} ) &nbsp;[ {i + 1} / {items.length} ] &nbsp;{pct ? pct + "%" : ""}
       {#if edit?.edits}<span class="unsaved">● edited, not saved yet</span>{/if}
     </div>
   {/if}
@@ -507,13 +544,13 @@
       <button title="Next (→, wheel down)" onclick={next}><Icon name="forward" /></button>
       <span class="sep"></span>
       <button title="Zoom out (−)" onclick={() => zoomBy(0.8)}><Icon name="zoom-out" /></button>
-      <select title="Zoom" value={zoom ? "cur" : "fit"} onchange={(e) => (e.currentTarget.value === "fit" ? fit() : setZoom(+e.currentTarget.value / 100))}>
+      <select title="Zoom" value={zoom ? "cur" : "fit"} onchange={(e) => (e.currentTarget.value === "fit" ? fit() : setZoom((+e.currentTarget.value / 100) * scaleF))}>
         <option value="fit">Fit{zoom ? "" : ` (${pct}%)`}</option>
         {#if zoom}<option value="cur">{pct}%</option>{/if}
         {#each ZOOMS as z}<option value={z}>{z}%</option>{/each}
       </select>
       <button title="Zoom in (+, Ctrl+wheel)" onclick={() => zoomBy(1.25)}><Icon name="zoom-in" /></button>
-      <button title="Actual size (1)" onclick={() => setZoom(1)}><span class="t">1:1</span></button>
+      <button title="Actual size (1)" onclick={actualSize}><span class="t">1:1</span></button>
       <button title="Fit to screen (0)" onclick={fit}><Icon name="fullscreen" /></button>
       <span class="sep"></span>
       <button title="Rotate left (L)" onclick={() => doEdit({ op: "rotate_left" })}><Icon name="rot-left" /></button>

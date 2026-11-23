@@ -36,5 +36,3 @@ node_modules/
 # FastStone clean-room study screenshots (third-party UI, private, never published)
 /docs/ui-reference/shots/
 
-# Browser/viewer screenshots: some show local folders or a real portrait; retake with test images before publishing
-/docs/screenshots/browser/

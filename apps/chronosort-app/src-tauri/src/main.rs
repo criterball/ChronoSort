@@ -966,6 +966,7 @@ fn main() {
             browse::list_subdirs,
             browse::folder_samples,
             browse::reveal_item,
+            browse::image_size,
             fileops::fs_bin_status,
             fileops::fs_check_name,
             fileops::fs_new_folder,

@@ -146,8 +146,11 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
 ## 2026-11-23
 - `scripts/check.sh` passes (fmt, clippy, all tests, linux/mac checks, audit). Release build → `dist/ChronoSort.exe` (starts OK).
 - EXIF panel: a town picked from the offline list now also writes City / State / Country / CountryCode (same tags as Add a place); ✕ removes the position and the names. Typing coordinates by hand leaves existing names alone. Unit test + real ExifTool round trip cover it. Not yet in dist (built after the release build).
-- `docs/screenshots/browser/` is git-ignored: some shots show local folders or a real portrait (portrait.jpg). Retake with generated test images before publishing.
-- Pushed to criterball/ChronoSort at the user's request.
+- Pushed b2df843 to criterball/ChronoSort at the user's request.
+- **Zoom:** % and 1:1 now mean the REAL picture in SCREEN pixels (header size via `image_size`, devicePixelRatio). Zooming past the preview loads the original (`fthumb://<id>_o`, JPEG/PNG/GIF/BMP/WebP only, ≤ 256 MB); falls back to the preview on error. Verified: 960×1470 photo → Fit 69 %, 1:1 = 960 device px from `_o`.
+- **Bug fixed (safety):** `recycle_bin()` said "bin available" for a `subst` drive letter (the volume APIs fail on it, so the per-drive NukeOnDelete check was skipped) → "Recycle Bin" would have deleted for good. Now resolves the real path first (canonicalize; mapped network letters become \\?\UNC → no bin) and fails safe (unknown = no bin). Test `subst_drive_follows_the_real_drive`; verified in the app (X: offers only Delete permanently).
+- **Screenshots:** `docs/screenshots/browser/01–09` retaken with public-domain NASA photos (CREDITS.md lists every source). Demo set: `temp/cs_demo` built by `temp/cs_scripts/make_demo.py` from the face test data; shown via `subst X:` so the tree shows no private folders. The old dev shots (local folders, a portrait) are in `temp/cs_old_browser_shots`, not in git. README has a short Browse section with two shots.
+- Careful: the app reopens the LAST folder; before any screenshot, navigate away from private folders first.
 
 ## PAUSED 2026-11-22 late (user: "stop for today")
 - **Nothing committed or pushed.** The user asked about pushing, then decided to stop. The repo belongs to the **criterball** account (remote criterball/ChronoSort, commits as criterball's noreply). Before pushing, `gh auth switch` to criterball. Keep out `docs/screenshots/browser/01_thumbs_m.png` and `02_delete_no_bin.png`: they show the dev PC's own folders. Push only when the user says go.

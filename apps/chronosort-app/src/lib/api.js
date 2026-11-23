@@ -87,6 +87,8 @@ export const listDir = (path, showHidden = false) => invoke("list_dir", { path, 
 export const listSubdirs = (path, showHidden = false) => invoke("list_subdirs", { path, showHidden });
 export const folderSamples = (id) => invoke("folder_samples", { id });
 export const revealItem = (id) => invoke("reveal_item", { id });
+/** {w, h, original} of the full picture (header only), or null if unknown. */
+export const imageSize = (id) => invoke("image_size", { id });
 /** size: "s" | "m" | "l" (thumbnails) or "p" (viewer preview). */
 export const fthumbUrl = (id, size = "m") => convertFileSrc(`${id}_${size}`, "fthumb");
 

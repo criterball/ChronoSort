@@ -231,6 +231,34 @@ pub async fn folder_samples(state: State<'_, AppState>, id: u64) -> Res<Vec<u64>
     Ok(pics.into_iter().take(4).map(|p| state.browse.id_for(&p)).collect())
 }
 
+/// Full size of a picture in pixels, from its header only (no decoding), so the
+/// viewer can show zoom relative to the real picture, not its preview.
+/// Stored size: the UI swaps it when the preview is upright the other way (EXIF turn).
+/// `None` for formats the header reader does not know (e.g. HEIC, RAW).
+pub fn image_size_of(p: &Path) -> Option<(u32, u32)> {
+    image::ImageReader::open(p).ok()?.with_guessed_format().ok()?.into_dimensions().ok()
+}
+
+#[derive(Serialize)]
+pub struct ImageSize {
+    pub w: u32,
+    pub h: u32,
+    /// `fthumb://<id>_o` can serve the original (the webview draws this format).
+    pub original: bool,
+}
+
+#[tauri::command]
+pub async fn image_size(state: State<'_, AppState>, id: u64) -> Res<Option<ImageSize>> {
+    let p = state.browse.path(id).ok_or("unknown file")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (w, h) = image_size_of(&p)?;
+        let small_enough = std::fs::metadata(&p).is_ok_and(|m| m.len() <= MAX_ORIGINAL);
+        Some(ImageSize { w, h, original: small_enough && native_type(real_format(&p)).is_some() })
+    })
+    .await
+    .map_err(err)
+}
+
 /// Show a listed file or folder in Explorer / Finder / Files.
 #[tauri::command]
 pub fn reveal_item(state: State<'_, AppState>, id: u64) -> Res<()> {
@@ -270,16 +298,40 @@ fn real_format(p: &Path) -> cs_scan::Format {
     cs_scan::sniff(&head[..n], &ext)
 }
 
-/// `fthumb://<id>_<s|m|l|p>`
+/// Content type of a picture the webview can draw itself (sniffed, not by name).
+fn native_type(fmt: cs_scan::Format) -> Option<&'static str> {
+    use cs_scan::Format::*;
+    Some(match fmt {
+        Jpeg => "image/jpeg",
+        Png => "image/png",
+        Gif => "image/gif",
+        Bmp => "image/bmp",
+        Webp => "image/webp",
+        _ => return None,
+    })
+}
+
+/// Largest original the viewer loads at full size (bigger ones stay at preview size).
+const MAX_ORIGINAL: u64 = 256 * 1024 * 1024;
+
+/// `fthumb://<id>_<s|m|l|p|o>`; `o` = the original file, only for formats the webview draws.
 pub fn fthumb_response(app: &tauri::AppHandle, path: &str) -> tauri::http::Response<Vec<u8>> {
     use tauri::Manager;
     let state = app.state::<AppState>();
+    let mut ctype = "image/jpeg";
     let result = (|| -> Res<Vec<u8>> {
         let (id, code) = path.trim_start_matches('/').split_once('_').ok_or("bad request")?;
-        let size = size_for(code).ok_or("bad size")?;
         let file = state.browse.path(id.parse().map_err(err)?).ok_or("unknown file")?;
         let meta = std::fs::metadata(&file).map_err(err)?;
         let fmt = real_format(&file);
+        if code == "o" {
+            ctype = native_type(fmt).ok_or("not drawn at full size")?;
+            if meta.len() > MAX_ORIGINAL {
+                return Err("too large".into());
+            }
+            return std::fs::read(&file).map_err(err);
+        }
+        let size = size_for(code).ok_or("bad size")?;
         if fmt.kind() != cs_model::MediaKind::Image && fmt.kind() != cs_model::MediaKind::Video {
             return Err("not a photo or video".into());
         }
@@ -289,7 +341,7 @@ pub fn fthumb_response(app: &tauri::AppHandle, path: &str) -> tauri::http::Respo
     // Not "immutable": the id stays the same when a file is edited in place.
     let b = tauri::http::Response::builder().header("Cache-Control", "no-cache");
     match result {
-        Ok(bytes) => b.header("Content-Type", "image/jpeg").status(200).body(bytes),
+        Ok(bytes) => b.header("Content-Type", ctype).status(200).body(bytes),
         Err(e) => b.header("Content-Type", "text/plain").status(404).body(e.into_bytes()),
     }
     .expect("static response")
@@ -350,5 +402,22 @@ mod tests {
         let k2 = cache_key(&f, &std::fs::metadata(&f).unwrap());
         assert_ne!(k1, k2);
         assert_eq!(k1.len(), 32);
+    }
+
+    #[test]
+    fn full_size_from_header_and_native_formats() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("wide.jpg");
+        image::RgbImage::from_pixel(300, 200, image::Rgb([9, 9, 9])).save(&f).unwrap();
+        assert_eq!(image_size_of(&f), Some((300, 200)));
+        // Wrong extension: sniffed by content, not by name.
+        let g = d.path().join("really_jpeg.png");
+        std::fs::copy(&f, &g).unwrap();
+        assert_eq!(image_size_of(&g), Some((300, 200)));
+        assert_eq!(native_type(real_format(&g)), Some("image/jpeg"));
+        let junk = d.path().join("junk.jpg");
+        std::fs::write(&junk, b"not a picture").unwrap();
+        assert_eq!(image_size_of(&junk), None);
+        assert_eq!(native_type(cs_scan::Format::Tiff), None);
     }
 }

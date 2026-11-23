@@ -70,12 +70,18 @@ mod imp {
         (r == 0).then_some(data)
     }
 
-    /// Mount point of the volume holding `p` ("C:\", "D:\Mount\Disk\") as a NUL-terminated wide string.
-    fn volume_root(p: &Path) -> Option<Vec<u16>> {
+    /// The nearest part of `p` that exists (a file may not exist yet).
+    fn existing(p: &Path) -> Option<std::path::PathBuf> {
         let mut q = std::path::absolute(p).ok()?;
         while !q.exists() {
             q = q.parent()?.to_path_buf();
         }
+        Some(q)
+    }
+
+    /// Mount point of the volume holding `p` ("C:\", "D:\Mount\Disk\") as a NUL-terminated wide string.
+    fn volume_root(p: &Path) -> Option<Vec<u16>> {
+        let q = existing(p)?;
         let w = win_path(&q).ok()?;
         let mut root = [0u16; 1024];
         // SAFETY: `w` is NUL-terminated; buffer length is given.
@@ -107,9 +113,17 @@ mod imp {
         if s.starts_with(r"\\") && !s.starts_with(r"\\?\") {
             return BinStatus::no("Network folders have no Recycle Bin.");
         }
-        let Some(root) = volume_root(path) else {
-            return BinStatus::no("Could not check this drive's Recycle Bin.");
+        // Work on the REAL location: a `subst` drive letter (X: -> D:\Photos) or a folder
+        // junction has no volume of its own (the volume APIs fail on it), and a mapped
+        // network letter resolves to \\?\UNC\server\share.
+        const UNKNOWN: &str = "Could not check whether this drive has a Recycle Bin.";
+        let Some(real) = existing(path).and_then(|q| std::fs::canonicalize(q).ok()) else {
+            return BinStatus::no(UNKNOWN);
         };
+        if real.to_string_lossy().starts_with(r"\\?\UNC\") {
+            return BinStatus::no("Network drives have no Recycle Bin.");
+        }
+        let Some(root) = volume_root(&real) else { return BinStatus::no(UNKNOWN) };
         // SAFETY: NUL-terminated root path.
         match unsafe { GetDriveTypeW(root.as_ptr()) } {
             DRIVE_REMOVABLE => return BinStatus::no("USB sticks and memory cards have no Recycle Bin."),
@@ -119,20 +133,28 @@ mod imp {
             _ => {}
         }
         // Per-drive setting "Don't move files to the Recycle Bin" (Recycle Bin properties).
+        match bin_switched_off(&root) {
+            Some(false) => BinStatus::yes(),
+            Some(true) => BinStatus::no("The Recycle Bin is switched off for this drive (Recycle Bin properties)."),
+            // Fail safe: "Recycle Bin" on a drive without one deletes for good on Windows,
+            // so never claim a bin that could not be checked.
+            None => BinStatus::no(UNKNOWN),
+        }
+    }
+
+    /// `Some(true)` when "Don't move files to the Recycle Bin" is set for the volume
+    /// mounted at `root`; `None` when the volume cannot be identified.
+    fn bin_switched_off(root: &[u16]) -> Option<bool> {
         let mut guid = [0u16; 64];
         // SAFETY: NUL-terminated mount point; buffer length is given.
-        if unsafe { GetVolumeNameForVolumeMountPointW(root.as_ptr(), guid.as_mut_ptr(), guid.len() as u32) } != 0 {
-            let n = guid.iter().position(|&c| c == 0).unwrap_or(0);
-            let name = String::from_utf16_lossy(&guid[..n]); // \\?\Volume{GUID}\
-            if let (Some(a), Some(b)) = (name.find('{'), name.find('}')) {
-                let key =
-                    format!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{}", &name[a..=b]);
-                if reg_dword(HKEY_CURRENT_USER, &key, "NukeOnDelete") == Some(1) {
-                    return BinStatus::no("The Recycle Bin is switched off for this drive (Recycle Bin properties).");
-                }
-            }
+        if unsafe { GetVolumeNameForVolumeMountPointW(root.as_ptr(), guid.as_mut_ptr(), guid.len() as u32) } == 0 {
+            return None;
         }
-        BinStatus::yes()
+        let n = guid.iter().position(|&c| c == 0)?;
+        let name = String::from_utf16_lossy(&guid[..n]); // \\?\Volume{GUID}\
+        let (a, b) = (name.find('{')?, name.find('}')?);
+        let key = format!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{}", &name[a..=b]);
+        Some(reg_dword(HKEY_CURRENT_USER, &key, "NukeOnDelete") == Some(1))
     }
 }
 
@@ -164,7 +186,27 @@ mod tests {
     #[test]
     fn missing_path_uses_existing_parent() {
         let b = recycle_bin(&std::env::temp_dir().join("not/there/yet.jpg"));
-        assert!(b.available || b.reason.as_deref() != Some("Could not check this drive's Recycle Bin."));
+        assert!(b.available || b.reason.as_deref() != Some("Could not check whether this drive has a Recycle Bin."));
+    }
+
+    /// A `subst` drive letter must get the answer of the drive it points to (it used to
+    /// skip the per-drive check and always say "bin available").
+    #[cfg(windows)]
+    #[test]
+    fn subst_drive_follows_the_real_drive() {
+        let real = tempfile::tempdir().unwrap();
+        let free = ('M'..='Z').rev().find(|c| !Path::new(&format!("{c}:\\")).exists());
+        let Some(letter) = free else { return };
+        let drive = format!("{letter}:");
+        let ok = std::process::Command::new("subst").arg(&drive).arg(real.path()).status().is_ok_and(|s| s.success());
+        if !ok {
+            eprintln!("skip: subst not available");
+            return;
+        }
+        let via_subst = recycle_bin(&Path::new(&format!("{drive}\\")).join("photo.jpg"));
+        let direct = recycle_bin(&real.path().join("photo.jpg"));
+        let _ = std::process::Command::new("subst").arg(&drive).arg("/D").status();
+        assert_eq!(via_subst, direct);
     }
 }
 

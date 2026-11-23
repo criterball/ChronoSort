@@ -13,6 +13,13 @@ Private, local sorter that puts photos and videos into **year folders**, with sa
 - **No online AI.** The internet is used only if you click Download for a model or engine, and every download is checked by SHA-256.
 - Windows first, then Linux and macOS.
 
+- **Browse, view and tidy up.** ChronoSort opens in a built-in file browser with thumbnails, a full-screen viewer, simple edits (turn, flip, crop, resize; JPEG turns are lossless), photo information you can edit, and safe file housekeeping with Undo.
+
+![File browser](docs/screenshots/browser/02_browse_thumbs.png)
+![Viewer with the edit and information panels](docs/screenshots/browser/04_viewer_panels.png)
+
+<sub>Screenshot photos: public-domain NASA images, see [credits](docs/screenshots/browser/CREDITS.md).</sub>
+
 Experimental software: **use at your own risk**, and keep a backup of your photos.
 
 License: **GPL-3.0-or-later**. Anyone sharing ChronoSort or a modified version must keep it open.
