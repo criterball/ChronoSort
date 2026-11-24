@@ -189,6 +189,24 @@ pub fn write_args(c: &MetaChanges) -> Res<Vec<String>> {
         a.extend([format!("-XMP-dc:Rights={t}"), format!("-EXIF:Copyright={t}")]);
     }
     let gps = if c.clear_gps { Some(None) } else { c.gps.map(Some) };
+    // A general area or country only (no town, no position): same tags as
+    // "Add a place"; the old position and town are removed with it.
+    let area = c.place.as_ref().filter(|p| gps.is_none() && clean(&p.city).is_empty());
+    if let Some(p) = area {
+        let country = clean(&p.country);
+        if country.is_empty() {
+            return Err("The area needs a country.".into());
+        }
+        a.extend(
+            ["-GPS:all=", "-XMP-exif:GPSLatitude=", "-XMP-exif:GPSLongitude=", "-XMP-photoshop:City="]
+                .map(String::from),
+        );
+        a.extend([
+            format!("-XMP-photoshop:State={}", clean(&p.region)),
+            format!("-XMP-photoshop:Country={country}"),
+            format!("-XMP-iptcCore:CountryCode={}", clean(&p.country_code)),
+        ]);
+    }
     match gps {
         Some(Some((lat, lon))) => {
             if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
@@ -224,7 +242,9 @@ pub fn write_args(c: &MetaChanges) -> Res<Vec<String>> {
             ]
             .map(String::from),
         ),
-        None if c.place.is_some() => return Err("A town can only be saved together with its position.".into()),
+        None if c.place.is_some() && area.is_none() => {
+            return Err("A town can only be saved together with its position.".into());
+        }
         None => {}
     }
     if a.len() == 4 {
@@ -347,6 +367,18 @@ mod tests {
         assert!(
             write_args(&MetaChanges { gps: Some((1.0, 1.0)), place: Some(nameless), ..Default::default() }).is_err()
         );
+        let area = PlaceNames {
+            city: String::new(),
+            region: "Tuscany".into(),
+            country: "Italy".into(),
+            country_code: "IT".into(),
+        };
+        let a = write_args(&MetaChanges { place: Some(area), ..Default::default() }).unwrap();
+        for t in ["-GPS:all=", "-XMP-photoshop:City=", "-XMP-photoshop:State=Tuscany", "-XMP-photoshop:Country=Italy"] {
+            assert!(a.contains(&t.to_string()), "general area: {t}");
+        }
+        let nowhere = PlaceNames { city: String::new(), region: "Tuscany".into(), ..Default::default() };
+        assert!(write_args(&MetaChanges { place: Some(nowhere), ..Default::default() }).is_err());
         let cleared = write_args(&MetaChanges { clear_gps: true, ..Default::default() }).unwrap();
         assert!(cleared.contains(&"-XMP-photoshop:City=".to_string()));
         assert!(cleared.contains(&"-XMP-photoshop:Country=".to_string()));
@@ -399,9 +431,26 @@ mod exiftool_tests {
             ("Adelaide".into(), "South Australia".into(), "Australia".into())
         );
         assert_eq!(get("CountryCode"), "AU");
-        // Undo: newest op in the shared history is ours.
-        let op = crate::fileops::take_last_for_test();
-        crate::fileops::undo_for_test(op).unwrap();
+        // A general area over the town: the position and the town go, the area stays.
+        let area = PlaceNames {
+            city: String::new(),
+            region: "Tuscany".into(),
+            country: "Italy".into(),
+            country_code: "IT".into(),
+        };
+        let after = write(&f, &MetaChanges { place: Some(area), ..Default::default() }).unwrap();
+        let get = |n: &str| after.tags.iter().find(|t| t.name == n).map(|t| t.value.clone());
+        assert!(after.gps.is_none(), "the old position is removed");
+        assert_eq!(
+            (get("City"), get("State").as_deref(), get("Country").as_deref()),
+            (None, Some("Tuscany"), Some("Italy"))
+        );
+        assert_eq!(get("Title").as_deref(), Some("Beach"), "other information is kept");
+        // Undo both: newest ops in the shared history are ours.
+        for _ in 0..2 {
+            let op = crate::fileops::take_last_for_test();
+            crate::fileops::undo_for_test(op).unwrap();
+        }
         assert_eq!(std::fs::read(&f).unwrap(), before, "undo must restore the exact bytes");
     }
 }

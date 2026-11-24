@@ -220,6 +220,9 @@ fn line(i: &cs_model::ItemReport) -> String {
 }
 
 fn main() -> Result<()> {
+    if let Some(code) = cs_thumb::video_helper_main() {
+        std::process::exit(code);
+    }
     match Cli::parse().cmd {
         Cmd::Info { path } => {
             let p = path.unwrap_or_else(|| PathBuf::from("."));

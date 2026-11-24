@@ -171,6 +171,7 @@ mod tests {
 #[derive(Serialize)]
 pub struct SearchOut {
     places: Vec<cs_geo::Place>,
+    regions: Vec<cs_geo::Region>,
     countries: Vec<cs_geo::Country>,
 }
 
@@ -178,7 +179,11 @@ pub struct SearchOut {
 pub async fn places_search(query: String) -> Res<SearchOut> {
     tauri::async_runtime::spawn_blocking(move || {
         let p = places()?;
-        Ok(SearchOut { places: p.search(&query, 12).into_iter().cloned().collect(), countries: p.countries(&query, 6) })
+        Ok(SearchOut {
+            places: p.search(&query, 12).into_iter().cloned().collect(),
+            regions: p.regions(&query, 5),
+            countries: p.countries(&query, 6),
+        })
     })
     .await
     .map_err(err)?

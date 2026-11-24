@@ -7,7 +7,7 @@
 use cs_scan::Format;
 
 mod external;
-pub use external::{ffmpeg_available, set_ffmpeg};
+pub use external::{ffmpeg_available, set_ffmpeg, video_helper_main};
 use image::{DynamicImage, ImageDecoder, ImageReader, Limits};
 use std::io::{self, BufReader, Cursor};
 use std::path::{Path, PathBuf};
@@ -127,7 +127,7 @@ pub fn load(path: &Path, format: Format, max_side: u32) -> Result<DynamicImage, 
             Some(j) => decode_limited(ImageReader::new(Cursor::new(j)))?,
             None => return Err(ThumbError::Unsupported("this RAW/HEIC file (no embedded preview)")),
         },
-        f if f.kind() == cs_model::MediaKind::Video => return external::preview(path, max_side, true),
+        f if f.kind() == cs_model::MediaKind::Video => return external::video(path, max_side),
         _ => return Err(ThumbError::Unsupported("this file type")),
     };
     let img = if img.width().max(img.height()) > max_side { img.thumbnail(max_side, max_side) } else { img };

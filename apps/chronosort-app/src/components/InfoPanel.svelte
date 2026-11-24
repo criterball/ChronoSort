@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { metaRead, metaWrite, formatBytes } from "../lib/api.js";
+  import WorldMap from "./WorldMap.svelte";
 
   // item: browser entry; index/total for "[n / N]"; onchanged() after a save (undo label etc.);
   // onpin(bool): keep the fly-out open while editing.
@@ -79,7 +80,11 @@
     if (f.keywords !== o.keywords) ch.keywords = f.keywords.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
     if (f.author !== o.author) ch.author = f.author;
     if (f.copyright !== o.copyright) ch.copyright = f.copyright;
-    if (f.lat !== o.lat || f.lon !== o.lon) {
+    if (form.place?.area && !f.lat.trim() && !f.lon.trim()) {
+      // A general area / country only: names without a position (an old one is removed).
+      const p = form.place;
+      ch.place = { city: "", region: p.region, country: p.country, country_code: p.country_code };
+    } else if (f.lat !== o.lat || f.lon !== o.lon) {
       if (!f.lat.trim() && !f.lon.trim()) ch.clear_gps = true;
       else {
         const la = parseFloat(f.lat), lo = parseFloat(f.lon);
@@ -115,17 +120,23 @@
     searchTimer = setTimeout(async () => {
       try {
         const r = await invoke("places_search", { query: q });
-        placeHits = r.places.slice(0, 6);
+        placeHits = [
+          ...r.places.slice(0, 6),
+          ...r.regions.slice(0, 3).map((g) => ({ area: true, city: "", region: g.name, country: g.country, country_code: g.code, lat: g.lat, lon: g.lon })),
+          ...r.countries.slice(0, 2).map((c) => ({ area: true, city: "", region: "", country: c.name, country_code: c.code, lat: c.lat, lon: c.lon })),
+        ];
       } catch (e) {
         error = String(e);
       }
     }, 250);
   }
+  const hitLabel = (p) => [p.city, p.region, p.country].filter(Boolean).join(", ") + (p.area ? (p.region ? " (general area)" : " (country only)") : "");
   function pickPlace(p) {
-    form.lat = p.lat.toFixed(6);
-    form.lon = p.lon.toFixed(6);
+    // A town fills in its position; an area or country has none (an old one is removed on save).
+    form.lat = p.area ? "" : p.lat.toFixed(6);
+    form.lon = p.area ? "" : p.lon.toFixed(6);
     form.place = p;
-    placeQ = [p.city, p.region, p.country].filter(Boolean).join(", ");
+    placeQ = hitLabel(p);
     placeHits = [];
   }
 
@@ -162,6 +173,7 @@
         <tr><th>GPS</th><td>{info.gps ? `${info.gps[0].toFixed(5)}, ${info.gps[1].toFixed(5)}` : ""}</td></tr>
       </tbody>
     </table>
+    {#if info.gps}<WorldMap lat={info.gps[0]} lon={info.gps[1]} label={row(["City", "State", "Country"]) || "Where this photo was taken"} />{/if}
   {:else if info && tab === "all"}
     <input class="flt" bind:value={filter} placeholder="Find a tag…" spellcheck="false" />
     <table class="all">
@@ -181,10 +193,10 @@
       <label>Copyright <input bind:value={form.copyright} /></label>
       <fieldset>
         <legend>Place (GPS + town, region, country)</legend>
-        <input bind:value={placeQ} oninput={searchPlace} placeholder="Find a town… (offline list)" />
+        <input bind:value={placeQ} oninput={searchPlace} placeholder="Find a town, area or country… (offline list)" />
         {#if placeHits.length}
           <ul class="hits">
-            {#each placeHits as p}<li><button type="button" onclick={() => pickPlace(p)}>{[p.city, p.region, p.country].filter(Boolean).join(", ")}</button></li>{/each}
+            {#each placeHits as p}<li><button type="button" onclick={() => pickPlace(p)}>{hitLabel(p)}</button></li>{/each}
           </ul>
         {/if}
         <div class="ll">
@@ -192,6 +204,9 @@
           <input bind:value={form.lon} placeholder="Longitude" aria-label="Longitude" />
           <button type="button" onclick={() => { form.lat = ""; form.lon = ""; form.place = null; placeQ = ""; }} title="Remove the position and the place names">✕</button>
         </div>
+        {#if form.place && (form.place.area ? form.place.lat != null : true)}
+          <WorldMap lat={form.place.lat} lon={form.place.lon} kind={form.place.area ? (form.place.region ? "area" : "country") : "town"} label={hitLabel(form.place)} />
+        {/if}
       </fieldset>
       <p class="muted small">A safety copy is kept first; Ctrl+Z in the browser puts the old information back.</p>
       <div class="btns">

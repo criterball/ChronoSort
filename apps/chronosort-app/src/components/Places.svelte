@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { pickFolder, confirmBox, onProgress, thumbUrl, plural, openFolder } from "../lib/api.js";
   import { app, places as st, resetPlaces } from "../lib/state.svelte.js";
+  import WorldMap from "./WorldMap.svelte";
 
   let { active } = $props();
 
@@ -49,6 +50,15 @@
     }, 250);
   });
 
+  // Areas first when the best area is much bigger than the biggest matching town:
+  // "tuscany" → the Italian region, not the small Canadian town; "new york" → still the city.
+  let regionsFirst = $derived.by(() => {
+    if (!results?.regions?.length) return false;
+    const town = Math.max(0, ...results.places.map((p) => p.population));
+    // (Area totals add up every listed town, boroughs included, so a big city always wins.)
+    return town < 1_000_000 && results.regions[0].population > 2 * town;
+  });
+
   let groups = $derived.by(() => {
     if (!st.scan) return [];
     const m = new Map();
@@ -63,14 +73,22 @@
   let withPlace = $derived(st.scan ? st.scan.files.filter((f) => f.has_place).length : 0);
   const setGroup = (files, on) => { for (const f of files) st.chosen[f.rel] = on; st.chosen = { ...st.chosen }; };
 
-  const labelOf = (t) => t.kind === "city" ? [t.place.city, t.place.region, t.place.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ") : `${t.name} (country only)`;
+  const labelOf = (t) =>
+    t.kind === "city" ? [t.place.city, t.place.region, t.place.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ")
+    : t.kind === "region" ? `${t.name}, ${t.country} (general area)`
+    : `${t.name} (country only)`;
+  const whatIsWritten = {
+    city: "The town's map position and its name are written into each photo.",
+    region: "Only the area and country names are written; no map position. An old map position or town name is removed.",
+    country: "Only the country name is written; no map position. An old map position, town or area name is removed.",
+  };
 
   async function apply() {
     const rels = st.scan.files.filter((f) => st.chosen[f.rel]).map((f) => f.rel);
     const replacing = st.scan.files.filter((f) => st.chosen[f.rel] && f.has_place).length;
     const ok = await confirmBox(
       `Add “${labelOf(st.target)}” to ${plural(rels.length, "photo", "photos")}?\n\n` +
-      (st.target.kind === "city" ? "The town's map position and its name are written into each photo." : "Only the country name is written; no map position.") +
+      whatIsWritten[st.target.kind] +
       (replacing ? `\n${plural(replacing, "photo already has", "photos already have")} a place; it will be replaced.` : "") +
       "\n\nThis changes these files. A copy of each photo is kept first, so you can undo it.",
       "Add a place", "Add the place", "Cancel",
@@ -171,10 +189,18 @@
 
     <div class="card where">
       <span class="label">Which place?</span>
-      <input type="text" class="big" placeholder="Type a town or country, e.g. Adelaide, Paris, Italy" bind:value={query} disabled={app.busy} />
+      <input type="text" class="big" placeholder="Type a town, area or country, e.g. Adelaide, Tuscany, Italy" bind:value={query} disabled={app.busy} />
       {#if searching && !results}<div class="progress"><div class="bar indeterminate"><div></div></div><span class="muted small">Loading the list of places (first time only) …</span></div>{/if}
       {#if results}
         <div class="choices">
+          {#if regionsFirst}
+          {#each results.regions as r}
+            <button class="choice" class:on={st.target?.kind === "region" && st.target.name === r.name && st.target.code === r.code}
+              onclick={() => (st.target = { kind: "region", name: r.name, country: r.country, code: r.code, lat: r.lat, lon: r.lon })}>
+              <strong>{r.name}</strong> <span class="muted">{r.country} · general area, no town (no map position)</span>
+            </button>
+          {/each}
+          {/if}
           {#each results.places as p}
             <button class="choice" class:on={st.target?.kind === "city" && st.target.place.lat === p.lat && st.target.place.lon === p.lon}
               onclick={() => (st.target = { kind: "city", place: p })}>
@@ -182,14 +208,29 @@
               <span class="muted small">{p.population >= 1000 ? `${Math.round(p.population / 1000).toLocaleString()} thousand people` : ""}</span>
             </button>
           {/each}
+          {#if !regionsFirst}
+          {#each results.regions as r}
+            <button class="choice" class:on={st.target?.kind === "region" && st.target.name === r.name && st.target.code === r.code}
+              onclick={() => (st.target = { kind: "region", name: r.name, country: r.country, code: r.code, lat: r.lat, lon: r.lon })}>
+              <strong>{r.name}</strong> <span class="muted">{r.country} · general area, no town (no map position)</span>
+            </button>
+          {/each}
+          {/if}
           {#each results.countries as c}
             <button class="choice" class:on={st.target?.kind === "country" && st.target.code === c.code}
-              onclick={() => (st.target = { kind: "country", name: c.name, code: c.code })}>
+              onclick={() => (st.target = { kind: "country", name: c.name, code: c.code, lat: c.lat, lon: c.lon })}>
               <strong>{c.name}</strong> <span class="muted">country only (no map position)</span>
             </button>
           {/each}
-          {#if !results.places.length && !results.countries.length}<p class="muted">No place found. Try another spelling or a bigger town nearby.</p>{/if}
+          {#if !results.places.length && !results.regions.length && !results.countries.length}<p class="muted">No place found. Try another spelling or a bigger town nearby.</p>{/if}
         </div>
+      {/if}
+      {#if st.target}
+        {@const t = st.target}
+        {@const pos = t.kind === "city" ? t.place : t}
+        {#if pos.lat != null}
+          <WorldMap lat={pos.lat} lon={pos.lon} kind={t.kind === "city" ? "town" : t.kind === "region" ? "area" : "country"} label={labelOf(t)} />
+        {/if}
       {/if}
     </div>
 

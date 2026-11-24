@@ -1,6 +1,6 @@
 # STATUS (resume point)
 
-Updated: 2026-11-20
+Updated: 2026-11-24
 
 ## Decided
 - Name: ChronoSort. License: GPL-3.0-or-later.
@@ -142,6 +142,31 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - **Fixed (Places.svelte)**: Undo from the "Earlier in this folder" list restored the files but left the screen stale (all pins, nothing ticked), showed no message, never showed failures, and dropped the run from the list even if files could not be put back. Now it rescans (the run list comes from disk, so a partly failed run stays), shows "✓ Undone …" plus a "Could not be put back" list on both screens; the done-screen Undo button stays while failures remain; a new apply clears an old undo message.
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
+
+## 2026-11-24 (later): item 5 video thumbnails without FFmpeg, 3c, item 4 / 6 closed (not committed)
+- **`crates/cs-video`** (new): `poster(path, max_side)` / `poster_bytes` for MP4/MOV with craft-media (isobmff) + craft-video (h264/hevc/vp9/av1 decode), same pinned craft-libs rev as cs-image. Key frame at or before ~1 s (a tenth of short clips), flush after it; display matrix → upright (iPhone Rotation 90 checked); colour by H.273 matrix tag (untagged: 709 for ≥720 lines, else 601), 10-bit = value / 4. Caps: 80 MP, 64 MiB packet, 60 packets.
+  - Checked against FFmpeg 8.1 (ShareX's ffmpeg.exe, test clips in temp/cs_video): decoded planes **bit-identical** for H.264, HEVC 8/10-bit (+4K), VP9, AV1 (`examples/yuvcheck.rs`); RGB 48.9 dB (709-tagged), 48.7 dB (SD). 10–70 ms per thumbnail, 4K HEVC10 full frame 340 ms.
+  - Not supported: H.264 High 10, MKV/WebM/AVI → FFmpeg fallback.
+  - `tests/robustness.rs` + 5 tiny seed clips (tests/seeds, generated with FFmpeg testsrc2): 300 cases debug; **100 000 release cases: 0 panics, 0 hangs, slowest 16 ms**.
+- **cs-thumb**: videos go to the built-in helper first (`video_helper_main()`: the program re-runs itself with `--cs-video-poster <max> <file>`, PNG on stdout, same 20 s limit / 64 MiB cap as FFmpeg), then FFmpeg if set up. App and CLI call `video_helper_main()` first thing in main. CLI tested: PNG out, exit 1 with a message for missing / non-video files, 2 for missing args.
+- Careful: `target/release/chronosort.exe` IS the app (`ChronoSort.exe`, case-insensitive). The CLI binary is `chronosort-cli.exe`. Running the wrong one opened three app windows one after another (2026-11-24, one background test with three calls); all closed.
+- Texts: Help (built-in MP4/MOV), video placeholders in Duplicates / Lightbox / Review, FFmpeg pack description ("previews for more kinds of video"), third_party/photocraft-craft-libs.md (video section: no unsafe in craft-video / craft-media, findings above).
+- **3c done:** `cs-geo/examples/try_video_place.rs` on 6 copies (5 generated + real 4500x3000 camera MP4): town → Keys/UserData GPSCoordinates + names read back; area → GPS and City removed; undo x2 → byte-identical. Tagged videos still decode (built-in helper exit 0, FFmpeg full decode 0 errors).
+- **Item 4 closed:** birth year + "not before the birth year" rule already built (vision.rs BirthCheck). Age estimate dropped on evidence (research/age_eval_2026-11-21.txt: 7.9 y mean error vs 4.4 y for the whole-photo AI date). No child photos in the test set; revisit only with a public test set of children.
+- **Item 6 closed:** downloads already use `RootCerts::PlatformVerifier` (cs-ai/download.rs, since 74ff1f0). Light theme looked at: Tools, People, Settings, Places + map: fine (Sort review step not checked).
+- **Settings → AI models hardware check** already exists (GPU name + VRAM shown).
+- **Release app tested (20:05):** `ChronoSort.exe --cs-video-poster` (windows subsystem) writes the PNG to a pipe, exit 0, no window. Browse on temp/cs_video: 13/13 supported clips get thumbnails, rotated MOVs upright, H.264 High 10 shows the video icon (no FFmpeg here). No helper processes left behind. dist/ChronoSort.exe (46.8 MB, stripped) + chronosort-cli.exe updated (local only, not uploaded).
+
+## 2026-11-24: Places 3a "general location" + 3b map (not committed)
+- `Places::regions(query, n)` in cs-geo/places.rs: unique region + country, the region name must start with the text before a comma, words after it narrow by country ("queensland, aus"); exact name first, then bigger (summed town population). Folded names precomputed → 3–5 ms on the real list (150 ms before). ExifTool's list has English names (Tuscany, Bavaria), not local ones (Toscana, Bayern).
+- `Target::Region { name, country, code }` writes XMP-photoshop:State + Country + iptcCore:CountryCode, no GPS. **Region and Country now remove the finer old place** (`clear_finer`: GPS:all + XMP-exif GPS / Keys+UserData GPSCoordinates for video, City; Country also State). Before this, "country only" over a Paris photo left Paris GPS + City in it.
+- `places_search` returns `regions`; Places.svelte lists them between towns and countries ("general area, no town"), confirm text per kind; Help updated.
+- Real ExifTool test (`cargo run -p cs-geo --example try_region -- dist/exiftool/exiftool.exe <copies> paris tuscany`): Paris → Tuscany (GPS + City gone) → Italy only (State gone), undo ×3 → all 6 files byte-identical.
+- **EXIF panel** (InfoPanel + meta.rs): the place search also lists areas and countries. Picking one writes the names, removes the old position and town (`place` with an empty city and no gps), and typed coordinates win over a picked area. Unit test + the real-ExifTool round trip extended: Adelaide → Tuscany removes the GPS + City, keeps the Title, two undos → exact bytes.
+- **3b map preview DONE:** `WorldMap.svelte` + `src/lib/worldmap.js` (Natural Earth 110 m land, public domain, `third_party/natural-earth.md`). Town = pin (36° window); area / country = dashed ring around a population-weighted rough middle (`Region/Country.lat/lon`, never written). Theme tokens via color-mix, so all themes work. Shown in Places, in the EXIF summary (photo GPS) and when picking in the EXIF edit form.
+- Places ordering: areas come first when the best area has more than twice the people of the biggest matching town and that town is under 1 million (tuscany/texas/new south/queensland/washington → area; new york/paris/adelaide → town).
+- **Click-tested in the debug app** (cdp, 2026-11-24): Tuscany on 6 photos including one tagged Houston; the dialog said "1 photo already has a place; it will be replaced"; ExifTool read back State/Country/Code only (Houston GPS + City gone); Undo → all 6 byte-identical. Shots in temp/cs_shots/map_*.png (not in git). press_dialog.ps1 needs `powershell -ExecutionPolicy Bypass -File …` here.
+- Not click-tested: the EXIF panel map/area pick in the viewer (covered by backend tests only). Full check.sh passed on the 3a state; after that clippy + cs-geo + app tests pass.
 
 ## PAUSED 2026-11-23 late (user: "save progress and where you left off and stop for today")
 - **Git:** pushed up to decb2ff (criterball/ChronoSort). Near-duplicates + robustness test + strip + STATUS are **staged, NOT committed** (commit was blocked: user rule "no commits until asked"). Ask the user before committing / pushing. The user also said "don't upload just yet" about a compiled release (sizes: dist 116 MB, release zip ~27 MB, ~20 MB expected with strip).

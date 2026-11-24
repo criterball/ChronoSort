@@ -33,6 +33,42 @@ impl Place {
 pub struct Country {
     pub name: String,
     pub code: String,
+    /// Rough middle (population-weighted towns), only for drawing a map; never written.
+    pub lat: f64,
+    pub lon: f64,
+}
+
+/// A region (state, province, county …) for a "general location" with no town.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Region {
+    pub name: String,
+    pub country: String,
+    pub code: String,
+    /// People living in the listed towns of this region (for ordering only).
+    pub population: u64,
+    /// Rough middle (population-weighted towns), only for drawing a map; never written.
+    pub lat: f64,
+    pub lon: f64,
+}
+
+/// Running population-weighted average of town positions.
+#[derive(Default)]
+struct Middle {
+    w: f64,
+    lat: f64,
+    lon: f64,
+}
+
+impl Middle {
+    fn add(&mut self, p: &Place) {
+        let w = p.population.max(1) as f64;
+        self.w += w;
+        self.lat += p.lat * w;
+        self.lon += p.lon * w;
+    }
+    fn get(&self) -> (f64, f64) {
+        if self.w > 0.0 { (self.lat / self.w, self.lon / self.w) } else { (0.0, 0.0) }
+    }
 }
 
 /// Lower case, accents removed: "Zürich" -> "zurich", "Kraków" -> "krakow".
@@ -87,6 +123,8 @@ pub struct Places {
     all: Vec<Place>,
     /// Folded "city region country" per place, for searching.
     keys: Vec<(String, String)>,
+    /// Folded region name per place.
+    region_keys: Vec<String>,
 }
 
 impl Places {
@@ -95,7 +133,8 @@ impl Places {
             .iter()
             .map(|p| (fold(&p.city), fold(&format!("{} {} {}", p.region, p.country, p.country_code))))
             .collect();
-        Places { all, keys }
+        let region_keys = all.iter().map(|p| fold(&p.region)).collect();
+        Places { all, keys, region_keys }
     }
 
     pub fn len(&self) -> usize {
@@ -138,16 +177,68 @@ impl Places {
         hits.into_iter().take(n).map(|(_, _, i)| &self.all[i]).collect()
     }
 
+    /// Regions matching what the user typed ("tuscany", "texas", "new south wales,
+    /// australia"): the region name must match the start of the query (exact,
+    /// then starts-with); words after a comma narrow by country. Bigger regions first.
+    pub fn regions(&self, query: &str, n: usize) -> Vec<Region> {
+        let q = fold(query.trim());
+        let mut parts = q.splitn(2, ',');
+        let name = parts.next().unwrap_or("").trim().to_string();
+        let narrow: Vec<&str> = parts.next().unwrap_or("").split([',', ' ']).filter(|w| !w.is_empty()).collect();
+        if name.is_empty() {
+            return vec![];
+        }
+        let mut seen: std::collections::HashMap<(String, String), (Region, Middle)> = std::collections::HashMap::new();
+        for (p, r) in self.all.iter().zip(&self.region_keys) {
+            if p.region.is_empty() || !r.starts_with(&name) {
+                continue;
+            }
+            let c = fold(&format!("{} {}", p.country, p.country_code));
+            if !narrow.iter().all(|w| c.contains(w)) {
+                continue;
+            }
+            let (r, m) = seen.entry((p.region.clone(), p.country_code.clone())).or_insert_with(|| {
+                let r = Region {
+                    name: p.region.clone(),
+                    country: p.country.clone(),
+                    code: p.country_code.clone(),
+                    population: 0,
+                    lat: 0.0,
+                    lon: 0.0,
+                };
+                (r, Middle::default())
+            });
+            r.population += p.population;
+            m.add(p);
+        }
+        let mut out: Vec<Region> = seen
+            .into_values()
+            .map(|(mut r, m)| {
+                (r.lat, r.lon) = m.get();
+                r
+            })
+            .collect();
+        out.sort_by(|a, b| (fold(&a.name) != name).cmp(&(fold(&b.name) != name)).then(b.population.cmp(&a.population)));
+        out.truncate(n);
+        out
+    }
+
     /// Countries matching what the user typed (for "country only").
     pub fn countries(&self, query: &str, n: usize) -> Vec<Country> {
         let q = fold(query.trim());
-        let mut seen = std::collections::BTreeMap::new();
+        let mut seen: std::collections::BTreeMap<String, (String, Middle)> = std::collections::BTreeMap::new();
         for p in &self.all {
             if q.is_empty() || fold(&p.country).starts_with(&q) || fold(&p.country_code) == q {
-                seen.entry(p.country.clone()).or_insert_with(|| p.country_code.clone());
+                seen.entry(p.country.clone()).or_insert_with(|| (p.country_code.clone(), Middle::default())).1.add(p);
             }
         }
-        seen.into_iter().take(n).map(|(name, code)| Country { name, code }).collect()
+        seen.into_iter()
+            .take(n)
+            .map(|(name, (code, m))| {
+                let (lat, lon) = m.get();
+                Country { name, code, lat, lon }
+            })
+            .collect()
     }
 }
 
@@ -175,6 +266,15 @@ Broken,Row\n";
         assert_eq!(p.search("newport", 5)[0].region, "Wales, UK", "quoted CSV field");
         assert!(p.search("", 5).is_empty() && p.search("xyzzy", 5).is_empty());
         assert_eq!(p.search("paris", 5)[0].label(), "Paris, Île-de-France, France");
-        assert_eq!(p.countries("fr", 5)[0], Country { name: "France".into(), code: "FR".into() });
+        let r = p.regions("ile-de", 5);
+        assert_eq!((r[0].name.as_str(), r[0].code.as_str()), ("Île-de-France", "FR"));
+        assert_eq!(p.regions("new york", 5)[0].name, "New York");
+        assert_eq!(p.regions("texas, united", 5).len(), 1);
+        assert!(p.regions("texas, france", 5).is_empty(), "words after a comma narrow by country");
+        assert!(p.regions("", 5).is_empty());
+        let fr = &p.countries("fr", 5)[0];
+        assert_eq!((fr.name.as_str(), fr.code.as_str()), ("France", "FR"));
+        let us = &p.countries("united s", 5)[0];
+        assert!(us.lon < -74.0 && us.lon > -95.6, "weighted middle lies between the towns: {}", us.lon);
     }
 }

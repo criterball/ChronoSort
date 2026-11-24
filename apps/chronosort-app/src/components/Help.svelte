@@ -68,6 +68,7 @@
 
     <section id="help-browse">
       <h2>Browsing, viewing and editing</h2>
+      <p>Videos (MP4 and MOV from phones and cameras, including iPhone HEVC) get a thumbnail from ChronoSort's own built-in video reader, so no extra download is needed. Other kinds of video show a thumbnail only when the optional FFmpeg pack is installed.</p>
       <p>The browser shows <strong>all</strong> files, so nothing gets missed. Choose <em>Photos &amp; videos</em> at the top to see only those. The buttons <strong>S</strong>, <strong>M</strong> and <strong>L</strong> change the thumbnail size; Tiles, List and Details show more about each file.</p>
       <p><strong>Right-click a folder</strong> to sort it into years, find duplicates, people, or add a place. Right-click files for copy, move, rename and delete. Everything can be undone with Ctrl+Z, except <em>Delete permanently</em>.</p>
       <p><strong>Recycle Bin:</strong> ChronoSort checks every drive first. If the Recycle Bin is switched off for that drive, or it is a USB stick, memory card or network drive (which have none), only <em>Delete permanently</em> is offered, with a clear warning, because a “Recycle Bin” delete would really be permanent there.</p>
@@ -131,7 +132,7 @@
       <h2>Adding a place</h2>
       <p><strong>Add a place</strong> writes where photos were taken into many photos at once, so photo apps can show them on a map or find them by town. Choose a folder, tick the photos, type a town (for example <em>Adelaide</em>) and pick it from the list. The list of about 116,000 towns is built into ChronoSort, so no internet is needed.</p>
       <ul>
-        <li>A <strong>town</strong> writes its map position and its name. <strong>Country only</strong> writes just the country name, without a made-up map position.</li>
+        <li>A <strong>town</strong> writes its map position and its name. A <strong>general area</strong> (for example <em>Tuscany</em> or <em>Queensland</em>) writes the area and country names, and <strong>country only</strong> writes just the country name; neither writes a made-up map position. When one of these replaces an older place, the old map position and town are removed so the photo does not name two places.</li>
         <li>Photos that already have a place are not ticked, so they are not changed by accident.</li>
         <li>This <strong>changes the photo files</strong>. Before each photo is changed, a copy is kept in <span class="mono">.chronosort\place-backups</span> inside the folder. <strong>Undo</strong> puts the photos back exactly as they were (unless you changed them again in the meantime).</li>
         <li>Best used on your sorted copies, not on your only originals.</li>

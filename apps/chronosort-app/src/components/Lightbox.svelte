@@ -48,7 +48,7 @@
     <div class="box">
       <div class="pic">
         {#if !it.hash || broken[it.hash]}
-          <div class="placeholder">{it.kind === "video" ? "▶ Video: no preview (get FFmpeg in Settings → AI models)" : "No preview for this file"}</div>
+          <div class="placeholder">{it.kind === "video" ? "▶ Video: no preview for this kind of video (the optional FFmpeg pack in Settings → AI models reads more kinds)" : "No preview for this file"}</div>
         {:else}
           {#key it.hash}
             <img src={previewUrl(it.hash)} alt={nameOf(it.rel_path)} onerror={() => (broken = { ...broken, [it.hash]: true })} />

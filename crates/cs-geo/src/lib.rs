@@ -11,7 +11,7 @@
 pub mod exiftool;
 pub mod places;
 
-pub use places::{Country, Place, Places, fold, parse_listgeo};
+pub use places::{Country, Place, Places, Region, fold, parse_listgeo};
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -20,14 +20,26 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Target {
-    City { place: Place },
-    Country { name: String, code: String },
+    City {
+        place: Place,
+    },
+    /// A general location: region + country, no town and no map position.
+    Region {
+        name: String,
+        country: String,
+        code: String,
+    },
+    Country {
+        name: String,
+        code: String,
+    },
 }
 
 impl Target {
     pub fn label(&self) -> String {
         match self {
             Target::City { place } => place.label(),
+            Target::Region { name, country, .. } => format!("{name}, {country}"),
             Target::Country { name, .. } => name.clone(),
         }
     }
@@ -58,13 +70,35 @@ pub fn write_args(target: &Target, file: &Path, video: bool) -> Vec<String> {
             a.push(format!("-XMP-photoshop:Country={}", p.country));
             a.push(format!("-XMP-iptcCore:CountryCode={}", p.country_code));
         }
+        Target::Region { name, country, code } => {
+            clear_finer(&mut a, video, false);
+            a.push(format!("-XMP-photoshop:State={name}"));
+            a.push(format!("-XMP-photoshop:Country={country}"));
+            a.push(format!("-XMP-iptcCore:CountryCode={code}"));
+        }
         Target::Country { name, code } => {
+            clear_finer(&mut a, video, true);
             a.push(format!("-XMP-photoshop:Country={name}"));
             a.push(format!("-XMP-iptcCore:CountryCode={code}"));
         }
     }
     a.push(file.display().to_string());
     a
+}
+
+/// A coarser place replaces a finer one: remove the old map position and town
+/// (and, for "country only", the old region), so the photo never says "Paris"
+/// and "Germany" at once. Removing tags a file does not have is harmless.
+fn clear_finer(a: &mut Vec<String>, video: bool, region_too: bool) {
+    if video {
+        a.extend(["-Keys:GPSCoordinates=", "-UserData:GPSCoordinates="].map(String::from));
+    } else {
+        a.extend(["-GPS:all=", "-XMP-exif:GPSLatitude=", "-XMP-exif:GPSLongitude="].map(String::from));
+    }
+    a.push("-XMP-photoshop:City=".into());
+    if region_too {
+        a.push("-XMP-photoshop:State=".into());
+    }
 }
 
 /// One changed file in a run (for undo).
@@ -283,7 +317,15 @@ mod tests {
         let v = write_args(&Target::City { place: paris() }, Path::new("a.mov"), true);
         assert!(v.iter().any(|x| x.starts_with("-Keys:GPSCoordinates=48.853400, 2.348800")));
         let c = write_args(&Target::Country { name: "France".into(), code: "FR".into() }, Path::new("a.jpg"), false);
-        assert!(!c.iter().any(|x| x.contains("GPS")), "country only: no made-up coordinates");
+        assert!(!c.iter().any(|x| x.contains("GPS") && !x.ends_with('=')), "country only: no made-up coordinates");
+        assert!(c.contains(&"-GPS:all=".to_string()) && c.contains(&"-XMP-photoshop:State=".to_string()));
+        let r = Target::Region { name: "Tuscany".into(), country: "Italy".into(), code: "IT".into() };
+        assert_eq!(r.label(), "Tuscany, Italy");
+        let a = write_args(&r, Path::new("a.mov"), true);
+        assert!(
+            a.contains(&"-XMP-photoshop:State=Tuscany".to_string()) && a.contains(&"-XMP-photoshop:City=".to_string())
+        );
+        assert!(a.contains(&"-Keys:GPSCoordinates=".to_string()) && !a.contains(&"-XMP-photoshop:State=".to_string()));
     }
 
     #[test]

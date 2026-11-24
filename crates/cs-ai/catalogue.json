@@ -204,8 +204,8 @@
    "verified": true,
    "ram_gb": 0,
    "id": "ffmpeg",
-   "name": "FFmpeg 9.1 (previews for videos and iPhone photos)",
-   "description": "Makes previews of videos and of HEIC photos (iPhone, newer Android phones). FFmpeg build by Gyan Doshi (gyan.dev). Runs as a separate program, only on this PC, only to read the file and make a small picture. Not needed for sorting.",
+   "name": "FFmpeg 9.1 (previews for more kinds of video)",
+   "description": "ChronoSort already shows MP4 / MOV videos and HEIC photos by itself. FFmpeg adds previews of other kinds of video (MKV, WebM, AVI, older camera formats) and of the odd file the built-in readers cannot read. FFmpeg build by Gyan Doshi (gyan.dev). Runs as a separate program, only on this PC, only to read the file and make a small picture. Not needed for sorting.",
    "tier": "light",
    "vram_gb": 0,
    "files": [

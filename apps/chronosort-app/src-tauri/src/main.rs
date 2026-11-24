@@ -917,6 +917,10 @@ fn install_crash_log() {
 }
 
 fn main() {
+    // Started as the video-poster helper: do that and end (no window).
+    if let Some(code) = cs_thumb::video_helper_main() {
+        std::process::exit(code);
+    }
     install_crash_log();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

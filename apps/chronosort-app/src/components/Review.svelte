@@ -207,7 +207,7 @@
             <article class="card item" class:done>
               <button class="thumb" onclick={() => openPreview(it)} title="Show large (click)">
                 {#if broken[it.hash] || !it.hash}
-                  <div class="placeholder" title={isVideo(it) ? "For video previews, get FFmpeg in Settings → AI models" : ""}>{isVideo(it) ? "▶ video" : it.format.toUpperCase()}</div>
+                  <div class="placeholder" title={isVideo(it) ? "No preview for this kind of video; the optional FFmpeg pack in Settings → AI models reads more kinds" : ""}>{isVideo(it) ? "▶ video" : it.format.toUpperCase()}</div>
                 {:else}
                   <img
                     src={thumbUrl(it.hash)}

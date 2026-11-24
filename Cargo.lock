@@ -732,6 +732,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-media"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "craft-metadata"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
@@ -749,6 +757,15 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
 dependencies = [
  "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "craft-video"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "craft-media",
  "thiserror 2.0.21",
 ]
 
@@ -994,8 +1011,18 @@ dependencies = [
  "cs-model",
  "cs-scan",
  "cs-testgen",
+ "cs-video",
  "image",
  "tempfile",
+]
+
+[[package]]
+name = "cs-video"
+version = "0.1.0"
+dependencies = [
+ "craft-media",
+ "craft-video",
+ "image",
 ]
 
 [[package]]

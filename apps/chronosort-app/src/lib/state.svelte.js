@@ -92,7 +92,7 @@ export const places = $state({
   folder: "",
   scan: null, // { folder, files: [{ rel, kind, key, has_place }], runs }
   chosen: {}, // rel -> ticked
-  target: null, // { kind: "city", place } | { kind: "country", name, code }
+  target: null, // { kind: "city", place } | { kind: "region", name, country, code } | { kind: "country", name, code }
   report: null,
   undone: null,
 });

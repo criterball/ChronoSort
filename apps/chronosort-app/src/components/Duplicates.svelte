@@ -269,7 +269,7 @@
             <div class="big">
               {#if (cur.files[0].kind !== "image" && cur.files[0].kind !== "video") || bigBroken[cur.hash]}
                 <div class="placeholder">
-                  {cur.files[0].kind === "video" ? "▶ Video: no preview (get FFmpeg in Settings → AI models). Use “Show in Explorer” to play it." : "No preview for this file type. Use “Show in Explorer” to open it."}
+                  {cur.files[0].kind === "video" ? "▶ Video: no preview for this kind of video (the optional FFmpeg pack in Settings → AI models reads more kinds). Use “Show in Explorer” to play it." : "No preview for this file type. Use “Show in Explorer” to open it."}
                 </div>
               {:else}
                 {#key imgHash(cur, shownIdx)}

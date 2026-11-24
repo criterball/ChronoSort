@@ -1,0 +1,16 @@
+[package]
+name = "cs-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A poster frame for MP4/MOV videos in pure Rust (photocraft's craft-media + craft-video, MIT OR Apache-2.0), no FFmpeg needed."
+
+[dependencies]
+# photocraft / craft-libs, pinned to the same reviewed commit as cs-image (docs/THIRD_PARTY_POLICY.md).
+craft-media = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540", default-features = false, features = ["isobmff"] }
+craft-video = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540", features = ["h264-decode", "hevc-decode", "vp9-decode", "av1-decode"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+[lints]
+workspace = true
+
