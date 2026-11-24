@@ -17,7 +17,7 @@ export const makePlan = (dest, months, naming, resolutions) =>
 export const run = (mode, threads = 4) => invoke("run", { mode, threads });
 export const undo = (dest) => invoke("undo", { dest });
 export const checkNaming = (naming) => invoke("check_naming", { naming });
-export const findDuplicates = (roots, includeAll) => invoke("find_duplicates", { roots, includeAll });
+export const findDuplicates = (roots, includeAll, similar = false) => invoke("find_duplicates", { roots, includeAll, similar });
 export const resolveDuplicates = (keep, mode, target) => invoke("resolve_duplicates", { keep, mode, target });
 export const saveDuplicateReport = (path) => invoke("save_duplicate_report", { path });
 export const undoDuplicates = (target) => invoke("undo_duplicates", { target });

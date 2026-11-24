@@ -104,7 +104,8 @@
 
     <section id="help-dups">
       <h2>Finding duplicates</h2>
-      <p>Add one or more folders and click <strong>Find duplicates</strong>. Only files that are identical byte for byte count as duplicates — a resized or edited copy is not.</p>
+      <p>Add one or more folders and click <strong>Find duplicates</strong>. Normally only files that are identical byte for byte count as duplicates.</p>
+      <p><strong>Near-duplicates</strong> (tick the box before you start): ChronoSort also looks at every photo and finds the same photo made smaller or saved again in another quality, for example a copy that was e-mailed or exported from an old phone. These files are <em>not</em> identical, so such a set is left alone until you have compared the versions in the big preview (point at a version to see it) and ticked “include this set”. The version with the most pixels is suggested. Cropped photos and other shots of the same moment are not matched. Before anything moves, every version is checked again and is only touched if it is still exactly the file you compared.</p>
       <p>For each set of copies, ChronoSort selects the one to keep (the original, not a "copy of", and the oldest). You can pick another one. Then choose what happens to the extras:</p>
       <ul>
         <li><strong>Move them to a "duplicates" folder</strong> — recommended, and it can be undone.</li>

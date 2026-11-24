@@ -143,6 +143,18 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
 
+## PAUSED 2026-11-23 late (user: "save progress and where you left off and stop for today")
+- **Git:** pushed up to decb2ff (criterball/ChronoSort). Near-duplicates + robustness test + strip + STATUS are **staged, NOT committed** (commit was blocked: user rule "no commits until asked"). Ask the user before committing / pushing. The user also said "don't upload just yet" about a compiled release (sizes: dist 116 MB, release zip ~27 MB, ~20 MB expected with strip).
+- `scripts/check.sh` passes on the staged state. dist/ChronoSort.exe is from before near-duplicates (target/release has the near-dup build, not stripped yet).
+- **SD card E: "CHRONOSORT"** (exFAT, 59.5 GB) holds a portable copy (E:\ChronoSort, with models); may be reused or reformatted.
+- **Resume here: Next item 3 "Places, more"**, nothing edited yet. Plan:
+  - 3a general location: `Places::regions(query, n)` (unique region+country from the ExifTool list, biggest population first) in crates/cs-geo/src/places.rs; `Target::Region { name, country, code }` in cs-geo/src/lib.rs writing XMP-photoshop:State + Country + iptcCore:CountryCode, no GPS; Region/Country targets also clear an old City (Country also State) when replacing; `places_search` returns `regions`; Places.svelte shows them between towns and countries (results list ~line 179-191, confirm text line 72-73) and the EXIF panel could offer them too.
+  - 3b map preview: offline world outline (Natural Earth 110 m, public domain) embedded as SVG with a pin for the chosen town / region.
+  - 3c places on real MP4/MOV: do it with the video work (item 5), using real clips.
+- Then item 4 (birth year per person + age estimate from the vision model), then item 5 (video thumbnails with storytold craft-libs craft-video + craft-media, child process with time limit; user informed about H.264/HEVC patent pools).
+- Item 2 (find faces after Sort analysis) turned out to exist already: Overview.svelte "Find the faces in these photos" -> People autostart.
+- Test helpers: `temp/cs_scripts/cs.sh` (ev/key/shot via cdp.mjs on port 9333), `go.js` (browser navigation), `ai_time.js`, `make_demo.py`, `dup_ui.py`; demo photos `temp/cs_demo`, near-dup test set `temp/cs_neardup` (+ tool `temp/cs_mkdup`).
+
 ## 2026-11-23
 - `scripts/check.sh` passes (fmt, clippy, all tests, linux/mac checks, audit). Release build → `dist/ChronoSort.exe` (starts OK).
 - EXIF panel: a town picked from the offline list now also writes City / State / Country / CountryCode (same tags as Add a place); ✕ removes the position and the names. Typing coordinates by hand leaves existing names alone. Unit test + real ExifTool round trip cover it. Not yet in dist (built after the release build).
@@ -151,6 +163,11 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
 - **Bug fixed (safety):** `recycle_bin()` said "bin available" for a `subst` drive letter (the volume APIs fail on it, so the per-drive NukeOnDelete check was skipped) → "Recycle Bin" would have deleted for good. Now resolves the real path first (canonicalize; mapped network letters become \\?\UNC → no bin) and fails safe (unknown = no bin). Test `subst_drive_follows_the_real_drive`; verified in the app (X: offers only Delete permanently).
 - **Screenshots:** `docs/screenshots/browser/01–09` retaken with public-domain NASA photos (CREDITS.md lists every source). Demo set: `temp/cs_demo` built by `temp/cs_scripts/make_demo.py` from the face test data; shown via `subst X:` so the tree shows no private folders. The old dev shots (local folders, a portrait) are in `temp/cs_old_browser_shots`, not in git. README has a short Browse section with two shots.
 - Careful: the app reopens the LAST folder; before any screenshot, navigate away from private folders first.
+- **cs-image robustness test** (`crates/cs-image/tests/robustness.rs`): deterministic mutation fuzzer (truncation, bit flips, chunk drop/repeat, splices, huge size fields) over every save format + real HEIC/JPEG. 500 cases in debug, 3000 release; long run `CS_FUZZ_CASES=100000` = 0 panics, 0 hangs, slowest 176 ms. (`cargo fuzz` needs nightly + libFuzzer, not available on windows-gnu.)
+- **Portable mode tested on a real SD card** (user's 60 GB card, formatted exFAT "CHRONOSORT" with the user's OK; UAC script `temp/cs_scripts/format_sd.ps1` checks disk 3 = USB SD reader first). Copy with models: 6.0 GB in ~4.5 min; all 107 data files + program byte-identical; run from E:: portable=true, data in E:\ChronoSort\ChronoSortData, PC app data untouched, window 0.4 s, AI engine ready 5 s + first answer 8 s (warm OS cache; cold from card estimated 1–2.5 min). Not tested: another PC.
+- **Near-duplicates** (Find duplicates, tick box): cs-core `find_duplicates_ext` + 128-bit dHash from the 320 px thumbnail cache + aspect check (2 %), threshold 10 bits, sets only take photos matching ALL members; one file per content (identical copies stay in their own sets). Every file carries its own BLAKE3; cs-exec `DupAction.extras` now has a per-file expected hash (edited after the scan = skipped, test). UI: "similar" chip, sets left alone until "include this set", big preview follows the pointer, pixels + size per version, keeper = most pixels. Real test (temp/cs_neardup, NASA photos + resized / quality-30 / cropped copies): 4 near-dup sets + 1 identical set found, crop and another shot of the same crew NOT matched; move + Undo → all 12 files byte-identical.
+- Release profile now `strip = true`.
+- **Next agreed with the user:** items 2–4 of Next, then a new item: video thumbnails with storytold craft-libs `craft-video` (pure-Rust H.264 / HEVC Main10 / VP9 / AV1) + `craft-media` (MP4/MOV/MKV) instead of the FFmpeg download, decoded in a short-lived child process with a time limit. Mention HEVC/H.264 patent pools (user informed).
 
 ## PAUSED 2026-11-22 late (user: "stop for today")
 - **Nothing committed or pushed.** The user asked about pushing, then decided to stop. The repo belongs to the **criterball** account (remote criterball/ChronoSort, commits as criterball's noreply). Before pushing, `gh auth switch` to criterball. Keep out `docs/screenshots/browser/01_thumbs_m.png` and `02_delete_no_bin.png`: they show the dev PC's own folders. Push only when the user says go.
@@ -190,21 +207,19 @@ Plan: `~/.claude/plans/encapsulated-painting-hopcroft-*.md`. Clean-room study: `
   - **Click-tested in the app:** R R + Ctrl+S → lossless `portrait_edited.jpg` with the original time; crop 1:1 → 768×768; EXIF edit (title, keywords, Adelaide via place search) verified with ExifTool. Screenshots `docs/screenshots/browser/03–08`.
   - Help: new section "Browsing, viewing and editing" + shortcut groups. The Tools page has a Browse tile.
 - **Not yet:**
-  - Recycle-Bin path untested on a drive that has a bin (none on this PC).
-  - Writing the city/country names when a town is picked in the EXIF panel (only GPS is written now).
-  - Zoom % is relative to the 1280 px preview, not the full-size picture.
-  - A fuzz target for cs-image.
-  - Release build + dist; nice-to-have list for the user (in FASTSTONE_STUDY.md §7).
+  - Recycle-Bin path untested on a drive that HAS a bin (none on this PC).
+  - Nice-to-have list for the user to pick from (FASTSTONE_STUDY.md §7).
+  - (Done 2026-11-23: town names in the EXIF panel, zoom in real pixels, cs-image robustness test, release build + dist.)
 
-## Next (cleaned up 2026-11-21; done items removed)
-1. Test portable mode on a real USB stick (another PC if possible).
-2. Remember Check decisions (resolutions) so a long review survives closing the app.
-3. Video thumbnails + full HEIC/RAW previews (out-of-process helper: ffmpeg / libheif).
+## Next (re-checked against the code 2026-11-23)
+Already built (found in code, was still listed): review decisions saved per folder (review.rs, content-hash checked), Forget everyone, QuickTime creationdate, XMP in JPEG, Takeout truncated sidecar names (cs-scan `truncated_takeout_partner`), stalled-download timeout (cs-ai IDLE), child-process guard (cs-platform/child.rs, Windows job object + Linux PDEATHSIG), video thumbnails via the ffmpeg pack, Open folder after a run.
+1. Near-duplicates (resized / re-saved copies, bursts): perceptual hash in Find duplicates, user picks the keeper with the big preview.
+2. Find faces right after Sort analysis (optional, only if face models are installed).
+3. Places, more: "general location" (region/area without a town), map preview, places for videos tested on real MP4/MOV.
 4. Birth year per person + age estimate from the vision model (faces + "looks about 5" -> year).
-5. Places, more: "general location" (region/area without a town), map preview, places for videos tested on real MP4/MOV.
-6. Linux and macOS builds + testing (only compile-checked so far); Windows installer / release.
-7. Small: "Forget everyone" in People; find faces right after Sort analysis; folder-open button after a run; light-theme check; idle timeout for stalled downloads; rustls-platform-verifier; Linux/macOS child-process guard; more date sources (iPhone QuickTime creationdate, XMP in JPEG, Takeout truncated names); near-duplicates.
-8. Git: published 2026-11-21 as https://github.com/criterball/ChronoSort (public, commits as criterball). Screenshots ui2/17 + 18 are kept out by .gitignore (local model paths): retake them before adding. Commit/push only when the user asks.
+5. rustls-platform-verifier (use the OS certificate store for downloads); light-theme check.
+6. Needs hardware / the user: portable mode on a real USB stick; Linux + macOS builds and testing (only compile-checked); Windows installer / release.
+7. Git: https://github.com/criterball/ChronoSort (public, commits as criterball, push via gh auth switch). Screenshots ui2/17 + 18 are git-ignored (local model paths): retake before adding.
 
 ## New request (2026-11-20 15:52): AI models in Settings
 The user wants Settings to **suggest AI models that fit this PC** and offer **download** etc.

@@ -311,7 +311,9 @@ async fn find_duplicates(
     state: State<'_, AppState>,
     roots: Vec<String>,
     include_all: bool,
+    similar: Option<bool>,
 ) -> Res<serde_json::Value> {
+    let similar = similar.unwrap_or(false);
     let roots: Vec<PathBuf> = roots.into_iter().filter(|r| !r.trim().is_empty()).map(PathBuf::from).collect();
     if roots.is_empty() {
         return Err("choose at least one folder".into());
@@ -321,7 +323,20 @@ async fn find_duplicates(
         let emit = |done, total| {
             let _ = app2.emit("dup-progress", Progress { done, total, bytes: 0 });
         };
-        cs_core::dup::find_duplicates(&roots, include_all, &emit)
+        // Near-duplicates: look at each photo through the thumbnail cache (upright,
+        // HEIC / RAW previews included; cached for next time).
+        let st = app2.state::<AppState>();
+        let look = |f: &cs_core::dup::DupFile, hash: &str| -> Option<cs_core::dup::Look> {
+            let fmt = cs_scan::Format::from_name(&f.format);
+            let thumb = st.thumbs.get_sized(hash, &f.abs, fmt, cs_thumb::DEFAULT_SIZE).ok()?;
+            let g = image::open(thumb).ok()?.to_luma8();
+            let (w, h) = g.dimensions();
+            Some(cs_core::dup::Look {
+                gray: cs_core::dup::Gray { w, h, px: g.into_raw() },
+                pixels: browse::image_size_of(&f.abs),
+            })
+        };
+        cs_core::dup::find_duplicates_ext(&roots, include_all, similar.then_some(&look as cs_core::dup::LookFn), &emit)
     })
     .await
     .map_err(err)?
@@ -330,6 +345,12 @@ async fn find_duplicates(
     for g in &scan.groups {
         if let Some(f) = g.files.first() {
             s.by_hash.insert(g.hash.clone(), (f.abs.clone(), cs_scan::Format::from_name(&f.format)));
+        }
+        // Near-duplicates are different files: each copy gets its own preview.
+        for f in g.files.iter().filter(|_| g.similar) {
+            if let Some(h) = &f.hash {
+                s.by_hash.insert(h.clone(), (f.abs.clone(), cs_scan::Format::from_name(&f.format)));
+            }
         }
     }
     let out = serde_json::to_value(&scan).map_err(err)?;
@@ -353,6 +374,15 @@ async fn resolve_duplicates(
         for g in scan.groups.iter().filter(|g| keep.contains_key(&g.hash)) {
             let k = keep[&g.hash];
             let kept = g.files.get(k).ok_or("invalid choice")?;
+            // Identical sets share one hash; near-duplicates each have their own.
+            let hash_of = |f: &cs_core::dup::DupFile| -> Res<String> {
+                if g.similar {
+                    f.hash.clone().ok_or_else(|| "a file was not read completely".to_string())
+                } else {
+                    Ok(g.hash.clone())
+                }
+            };
+            let keep_hash = hash_of(kept)?;
             let extras = g
                 .files
                 .iter()
@@ -361,10 +391,14 @@ async fn resolve_duplicates(
                 .map(|(_, f)| {
                     // Keep the folder structure under a folder named after the checked folder.
                     let root_name = scan.roots[f.root].file_name().map(|n| n.to_string_lossy().into_owned());
-                    (f.abs.clone(), format!("{}/{}", root_name.unwrap_or_else(|| "folder".into()), f.rel))
+                    Ok((
+                        f.abs.clone(),
+                        format!("{}/{}", root_name.unwrap_or_else(|| "folder".into()), f.rel),
+                        hash_of(f)?,
+                    ))
                 })
-                .collect();
-            actions.push(cs_exec::DupAction { keep: kept.abs.clone(), hash: g.hash.clone(), extras });
+                .collect::<Res<Vec<_>>>()?;
+            actions.push(cs_exec::DupAction { keep: kept.abs.clone(), hash: keep_hash, extras });
         }
         (actions, scan.roots.clone())
     };
@@ -378,7 +412,7 @@ async fn resolve_duplicates(
     // whose bin is switched off (or a USB stick) deletes for good.
     if matches!(mode, cs_exec::DupMode::Trash) {
         for a in &actions {
-            for (p, _) in &a.extras {
+            for (p, _, _) in &a.extras {
                 let b = cs_platform::recycle_bin(p);
                 if !b.available {
                     return Err(format!(

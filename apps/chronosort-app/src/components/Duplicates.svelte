@@ -17,8 +17,17 @@
   let saved = $state("");
   let sel = $state(0); // selected set, shown in the preview pane
   let typed = $state("");
+  let peek = $state(null); // near-duplicates: which copy the big preview shows (null = the one to keep)
 
   let cur = $derived(dups.scan?.groups[sel] ?? null);
+  $effect(() => {
+    sel;
+    peek = null; // another set: show its kept copy first
+  });
+  // Near-duplicates are different files, so each copy has its own preview (by its own hash).
+  const imgHash = (g, i) => (g.similar ? g.files[i].hash : g.hash);
+  let shownIdx = $derived(cur ? (cur.similar ? (peek ?? dups.keep[cur.hash] ?? cur.keep) : 0) : 0);
+  const px = (f) => (f.pixels ? `${f.pixels[0]} × ${f.pixels[1]}` : "");
   // The Recycle Bin option only where the drive has one (on Windows a switched-off bin deletes for good).
   let binOff = $state("");
   $effect(() => {
@@ -52,12 +61,14 @@
     progress = { done: 0, total: 0 };
     const stop = await onProgress("dup-progress", (p) => (progress = p));
     try {
-      const s = await findDuplicates(dups.folders, dups.includeAll);
+      const s = await findDuplicates(dups.folders, dups.includeAll, dups.similar);
       dups.scan = s;
       dups.keep = Object.fromEntries(s.groups.map((g) => [g.hash, g.keep]));
       dups.target = defaultTarget();
       dups.phase = "results";
-      skip = {};
+      // Near-duplicates are NOT the same file: nothing happens to them until the user
+      // has compared them and ticked "include this set".
+      skip = Object.fromEntries(s.groups.filter((g) => g.similar).map((g) => [g.hash, true]));
       shown = 60;
       sel = 0;
     } catch (e) {
@@ -72,7 +83,9 @@
 
   let chosen = $derived(dups.scan ? dups.scan.groups.filter((g) => !skip[g.hash]) : []);
   let extras = $derived(chosen.reduce((n, g) => n + g.files.length - 1, 0));
-  let freed = $derived(chosen.reduce((n, g) => n + g.size * (g.files.length - 1), 0));
+  let freed = $derived(chosen.reduce((n, g) => n + g.files.reduce((m, f, i) => m + (i === dups.keep[g.hash] ? 0 : f.size), 0), 0));
+  let exactN = $derived(dups.scan ? dups.scan.groups.filter((g) => !g.similar).length : 0);
+  let similarN = $derived(dups.scan ? dups.scan.groups.filter((g) => g.similar).length : 0);
 
   // Keyboard on the results: arrows move between sets, 1-9 keep that copy, Space includes/leaves alone.
   function onKey(e) {
@@ -86,6 +99,7 @@
       document.querySelector(`.grow[data-gi="${sel}"]`)?.scrollIntoView({ block: "nearest" });
     } else if (/^[1-9]$/.test(e.key) && cur && Number(e.key) <= cur.files.length && !skip[cur.hash]) {
       dups.keep[cur.hash] = Number(e.key) - 1;
+      peek = null;
     } else if (e.key === " " && cur && (t === document.body || t.classList?.contains("grow"))) {
       skip = { ...skip, [cur.hash]: !skip[cur.hash] };
     } else return;
@@ -160,7 +174,7 @@
   {#if dups.phase === "pick" || dups.phase === "scanning"}
     <div class="head">
       <h1>Find duplicates</h1>
-      <p class="muted">Finds files that are exactly the same, byte for byte, even if their names differ. Checking only reads files.</p>
+      <p class="muted">Finds files that are exactly the same, byte for byte, even if their names differ, and if you like also the same photo saved in another size or quality. Checking only reads files.</p>
     </div>
 
     <div class="card form">
@@ -185,6 +199,10 @@
       <label class="check">
         <input type="checkbox" bind:checked={dups.includeAll} disabled={app.busy} />
         Also check other file types (documents, music …), not only photos and videos
+      </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={dups.similar} disabled={app.busy} />
+        <span>Also find <strong>near-duplicates</strong>: the same photo made smaller or saved again (photos only; slower, as every photo is looked at once)</span>
       </label>
 
       {#if error}<p class="problem">{error}</p>{/if}
@@ -212,8 +230,12 @@
     {:else}
       <div class="row head">
         <div>
-          <h1>{plural(s.groups.length, "file has", "files have")} identical copies</h1>
-          <p class="muted">{plural(s.files_scanned, "file", "files")} checked · {formatBytes(s.bytes_reclaimable)} could be freed. The suggested copy to keep is already selected.</p>
+          <h1>
+            {#if exactN}{plural(exactN, "file has", "files have")} identical copies{/if}{#if exactN && similarN}{", "}{/if}{#if similarN}{plural(similarN, "photo has", "photos have")} near-duplicates{/if}
+          </h1>
+          <p class="muted">{plural(s.files_scanned, "file", "files")} checked · {formatBytes(s.bytes_reclaimable)} could be freed from identical copies. The suggested copy to keep is already selected.
+            {#if similarN}<br />Near-duplicate sets are <strong>left alone</strong> until you have compared them and ticked “include this set”.{/if}
+            {#if s.not_compared}<br />{plural(s.not_compared, "photo", "photos")} could not be compared for near-duplicates (unreadable, or almost one colour).{/if}</p>
         </div>
         <span class="spacer"></span>
         <button class="ghost" disabled={app.busy} onclick={resetDups}>← Start over</button>
@@ -228,12 +250,12 @@
                 {#if (g.files[0].kind !== "image" && g.files[0].kind !== "video") || broken[g.hash]}
                   <span class="placeholder">{g.files[0].kind === "video" ? "▶" : g.files[0].format.toUpperCase()}</span>
                 {:else}
-                  <img src={thumbUrl(g.hash)} alt="" loading="lazy" onerror={() => (broken = { ...broken, [g.hash]: true })} />
+                  <img src={thumbUrl(imgHash(g, dups.keep[g.hash] ?? g.keep))} alt="" loading="lazy" onerror={() => (broken = { ...broken, [g.hash]: true })} />
                 {/if}
               </span>
               <span class="gtxt">
                 <strong>{nameOf(g.files[dups.keep[g.hash]].rel)}</strong>
-                <span class="muted">{plural(g.files.length, "copy", "copies")} · {formatBytes(g.size)}{skip[g.hash] ? " · left alone" : ""}</span>
+                <span class="muted">{#if g.similar}<span class="chip amber sm">similar</span> {/if}{plural(g.files.length, g.similar ? "version" : "copy", g.similar ? "versions" : "copies")} · {formatBytes(g.size)}{skip[g.hash] ? " · left alone" : ""}</span>
               </span>
             </button>
           {/each}
@@ -250,31 +272,39 @@
                   {cur.files[0].kind === "video" ? "▶ Video: no preview (get FFmpeg in Settings → AI models). Use “Show in Explorer” to play it." : "No preview for this file type. Use “Show in Explorer” to open it."}
                 </div>
               {:else}
-                {#key cur.hash}
-                  <img src={previewUrl(cur.hash)} alt={nameOf(cur.files[0].rel)} onerror={() => (bigBroken = { ...bigBroken, [cur.hash]: true })} />
+                {#key imgHash(cur, shownIdx)}
+                  <img src={previewUrl(imgHash(cur, shownIdx))} alt={nameOf(cur.files[shownIdx].rel)} onerror={() => (bigBroken = { ...bigBroken, [cur.hash]: true })} />
                 {/key}
+                {#if cur.similar}<span class="peeklabel">{shownIdx + 1}: {nameOf(cur.files[shownIdx].rel)}{px(cur.files[shownIdx]) ? ` · ${px(cur.files[shownIdx])}` : ""}</span>{/if}
               {/if}
             </div>
             <div class="pinfo">
               <div class="row">
                 <strong>Set {sel + 1} of {s.groups.length}</strong>
-                <span class="muted">{formatBytes(cur.size)} each</span>
+                <span class="muted">{cur.similar ? "different files, same picture" : `${formatBytes(cur.size)} each`}</span>
                 <span class="spacer"></span>
                 <label class="check small">
                   <input type="checkbox" checked={!skip[cur.hash]} onchange={(e) => (skip = { ...skip, [cur.hash]: !e.currentTarget.checked })} />
                   include this set
                 </label>
               </div>
-              <p class="muted small">These copies are the same picture, byte for byte. Choose <em>where</em> to keep it:</p>
+              {#if cur.similar}
+                <p class="note small">These look like <strong>the same photo</strong>, but the files are different (another size or quality).
+                  Point at a version to see it above and compare, then choose the one to keep: the suggested one has the most pixels.
+                  Nothing happens to this set until you tick “include this set”.</p>
+              {:else}
+                <p class="muted small">These copies are the same picture, byte for byte. Choose <em>where</em> to keep it:</p>
+              {/if}
               {#each cur.files as f, i}
-                <label class="copy" class:kept={dups.keep[cur.hash] === i} class:off={skip[cur.hash]}>
-                  <input type="radio" name="keep-{cur.hash}" checked={dups.keep[cur.hash] === i} disabled={skip[cur.hash]}
-                    onchange={() => (dups.keep[cur.hash] = i)} />
+                <label class="copy" class:kept={dups.keep[cur.hash] === i} class:off={skip[cur.hash]} class:peeked={cur.similar && shownIdx === i}
+                  onmouseenter={() => cur.similar && (peek = i)} onfocusin={() => cur.similar && (peek = i)}>
+                  <input type="radio" name="keep-{cur.hash}" checked={dups.keep[cur.hash] === i} disabled={skip[cur.hash] && !cur.similar}
+                    onchange={() => { dups.keep[cur.hash] = i; peek = null; }} />
                   <kbd>{i + 1}</kbd>
                   <span class="where">
                     <span class="fname">{nameOf(f.rel)}</span>
                     <span class="mono dir" title={f.abs}><span dir="ltr">{parentDir(f.abs)}</span></span>
-                    <span class="muted small">changed {fmtDate(f.mtime)}{i === cur.keep ? " · suggested" : ""}</span>
+                    <span class="muted small">{#if cur.similar}{`${px(f) ? px(f) + " · " : ""}${formatBytes(f.size)} · `}{/if}changed {fmtDate(f.mtime)}{i === cur.keep ? " · suggested" : ""}</span>
                   </span>
                   {#if skip[cur.hash]}<span class="chip">left alone</span>
                   {:else if dups.keep[cur.hash] === i}<span class="chip green">keep</span>
@@ -392,8 +422,16 @@
   .more { justify-self: center; margin-top: 6px; }
 
   .pane { position: sticky; top: 8px; overflow: hidden; display: grid; }
-  .big { background: var(--surface-2); height: 46vh; min-height: 240px; display: grid; place-items: center; }
+  .big { background: var(--surface-2); height: 46vh; min-height: 240px; display: grid; place-items: center; position: relative; }
   .big img { max-width: 100%; max-height: 46vh; object-fit: contain; }
+  /* Near-duplicates: which version the big preview shows. */
+  .peeklabel {
+    position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 3px 9px; border-radius: 6px;
+    background: rgba(0, 0, 0, 0.66); color: #fff; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .copy.peeked { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .note { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--amber-soft); }
+  .chip.sm { font-size: 11px; padding: 0 6px; }
   .placeholder { color: var(--muted); font-weight: 600; padding: 16px; text-align: center; }
   .pinfo { padding: 12px 16px 14px; display: grid; gap: 6px; }
   .copy {

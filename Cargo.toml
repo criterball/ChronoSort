@@ -16,3 +16,5 @@ all = { level = "warn", priority = -1 }
 [profile.release]
 lto = "thin"
 codegen-units = 1
+# No debug symbols in release builds: ChronoSort.exe about half the size.
+strip = true

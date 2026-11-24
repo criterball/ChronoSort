@@ -64,6 +64,7 @@ export const dups = $state({
   phase: "pick", // pick | scanning | results | working | done
   folders: [],
   includeAll: false,
+  similar: false, // also find near-duplicates (resized / re-saved photos)
   scan: null,
   keep: {}, // group hash -> index of the copy to keep
   action: "move", // move | trash | report

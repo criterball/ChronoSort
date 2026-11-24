@@ -3,7 +3,9 @@
 //!
 //! Safety rules, checked again right before touching anything:
 //! * the copy to keep must still exist and still have the scanned content;
-//! * an extra copy is only touched if it still has exactly that content;
+//! * an extra copy is only touched if it still has exactly the content it had
+//!   when it was found (identical sets: the same content as the kept copy;
+//!   near-duplicate sets: its own, different content the user compared);
 //! * the kept copy itself is never touched, so one copy always remains.
 
 use crate::{CopyResult, ExecError, Result, copy_verified, ensure_dirs, join_rel, open_db};
@@ -13,14 +15,15 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// What to do with one group of identical files.
+/// What to do with one set of duplicates.
 #[derive(Debug, Clone)]
 pub struct DupAction {
     pub keep: PathBuf,
-    /// BLAKE3 of the group's content (from the scan).
+    /// BLAKE3 of the kept copy (from the scan).
     pub hash: String,
-    /// Extra copies: absolute path + where to put it under the Duplicates folder.
-    pub extras: Vec<(PathBuf, String)>,
+    /// Extra copies: absolute path, where to put it under the Duplicates folder,
+    /// and its BLAKE3 from the scan (the same as `hash` for identical copies).
+    pub extras: Vec<(PathBuf, String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -90,19 +93,19 @@ pub fn resolve_duplicates(
     for a in actions {
         let keep_ok = a.keep.is_file() && cs_core::hash_file(&a.keep).ok().as_deref() == Some(a.hash.as_str());
         if !keep_ok {
-            for (p, _) in &a.extras {
+            for (p, _, _) in &a.extras {
                 rep.skipped.push((p.display().to_string(), "the copy to keep is missing or has changed".into()));
             }
             continue;
         }
-        for (src, rel) in &a.extras {
+        for (src, rel, expected) in &a.extras {
             let same_file = fs::canonicalize(src).ok() == fs::canonicalize(&a.keep).ok();
             if same_file || !src.is_file() {
                 rep.skipped.push((src.display().to_string(), "not found (or it is the kept copy)".into()));
                 continue;
             }
             let size = fs::metadata(src)?.len();
-            if cs_core::hash_file(src)? != a.hash {
+            if cs_core::hash_file(src)? != *expected {
                 rep.skipped.push((src.display().to_string(), "changed since the scan".into()));
                 continue;
             }
@@ -126,7 +129,7 @@ pub fn resolve_duplicates(
                     };
                     match res {
                         Ok(()) => {
-                            db.journal_set(jid, JournalState::Done, Some(&a.hash), None)?;
+                            db.journal_set(jid, JournalState::Done, Some(expected), None)?;
                             rep.moved += 1;
                             rep.bytes_freed += size;
                         }
@@ -141,7 +144,7 @@ pub fn resolve_duplicates(
                     db.durable_barrier()?;
                     match trash(src) {
                         Ok(()) => {
-                            db.journal_set(jid, JournalState::Done, Some(&a.hash), None)?;
+                            db.journal_set(jid, JournalState::Done, Some(expected), None)?;
                             rep.trashed += 1;
                             rep.bytes_freed += size;
                         }
@@ -179,11 +182,11 @@ mod tests {
         let hash = cs_core::hash_file(&root.join("a.jpg")).unwrap();
         let action = DupAction {
             keep: root.join("a.jpg"),
-            hash,
             extras: vec![
-                (root.join("Backup").join("a.jpg"), "Photos/Backup/a.jpg".into()),
-                (root.join("Backup").join("a (1).jpg"), "Photos/Backup/a (1).jpg".into()),
+                (root.join("Backup").join("a.jpg"), "Photos/Backup/a.jpg".into(), hash.clone()),
+                (root.join("Backup").join("a (1).jpg"), "Photos/Backup/a (1).jpg".into(), hash.clone()),
             ],
+            hash,
         };
         (d, root, vec![action])
     }
@@ -220,7 +223,8 @@ mod tests {
 
         // The kept copy listed as an "extra" must never be removed.
         fs::write(root.join("a.jpg"), b"same bytes").unwrap();
-        actions[0].extras.push((root.join("a.jpg"), "Photos/a.jpg".into()));
+        let h = actions[0].hash.clone();
+        actions[0].extras.push((root.join("a.jpg"), "Photos/a.jpg".into(), h));
         let r = resolve_duplicates(
             &actions,
             &DupMode::Trash,
@@ -231,6 +235,47 @@ mod tests {
         .unwrap();
         assert_eq!(r.trashed, 2);
         assert!(root.join("a.jpg").exists(), "one copy always remains");
+    }
+
+    /// Near-duplicates: every extra has its own content; each is checked against
+    /// its OWN scanned hash, and undo puts them back.
+    #[test]
+    fn near_duplicates_are_checked_one_by_one() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("data").join("Photos");
+        fs::create_dir_all(root.join("Small")).unwrap();
+        fs::write(root.join("big.jpg"), b"the big original").unwrap();
+        fs::write(root.join("Small").join("small.jpg"), b"small copy").unwrap();
+        fs::write(root.join("Small").join("resaved.jpg"), b"saved again").unwrap();
+        let h = |p: &Path| cs_core::hash_file(p).unwrap();
+        let (small, resaved) = (root.join("Small").join("small.jpg"), root.join("Small").join("resaved.jpg"));
+        let action = DupAction {
+            keep: root.join("big.jpg"),
+            hash: h(&root.join("big.jpg")),
+            extras: vec![
+                (small.clone(), "Photos/Small/small.jpg".into(), h(&small)),
+                (resaved.clone(), "Photos/Small/resaved.jpg".into(), h(&resaved)),
+            ],
+        };
+        // The user compared these; then one of them is edited before acting.
+        fs::write(&resaved, b"edited after the scan").unwrap();
+        let dup = d.path().join("Duplicates");
+        let r = resolve_duplicates(
+            std::slice::from_ref(&action),
+            &DupMode::MoveTo(dup.clone()),
+            std::slice::from_ref(&root),
+            &dup,
+            fake_trash,
+        )
+        .unwrap();
+        assert_eq!(r.moved, 1, "only the unchanged extra moves");
+        assert_eq!(r.skipped.len(), 1);
+        assert!(r.skipped[0].1.contains("changed"));
+        assert!(resaved.exists() && !small.exists() && root.join("big.jpg").exists());
+        assert!(dup.join("Photos/Small/small.jpg").exists());
+        let u = crate::undo(&dup, None).unwrap();
+        assert_eq!(u.restored, 1);
+        assert_eq!(fs::read(&small).unwrap(), b"small copy");
     }
 
     #[test]
