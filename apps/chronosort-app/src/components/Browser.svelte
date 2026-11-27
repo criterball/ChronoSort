@@ -4,9 +4,12 @@
   import TreeNode from "./TreeNode.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import Viewer from "./Viewer.svelte";
+  import Slideshow from "./Slideshow.svelte";
+  import Compare from "./Compare.svelte";
   import {
     browseRoots, listDir, folderSamples, revealItem, fthumbUrl, formatBytes, plural, confirmBox, openFolder, pickFolder,
     binStatus, checkName, newFolder, renameItem, transferItems, deleteItems, cancelFileOp, lastUndo, undoFileOp, onProgress,
+    readMarks, setRating, setTagged, starText,
   } from "../lib/api.js";
   import {
     app, browser, bprefs, saveBrowserPrefs, sort, dups, people, places,
@@ -21,6 +24,10 @@
   let notice = $state("");
   let menu = $state(null); // { x, y, items }
   let viewer = $state(null); // { ids: [...], index }
+  let compare = $state(null); // 2–4 entries shown side by side
+  let slideshow = $state(null); // { items, start }
+  let marks = $state({}); // file id -> { rating (0–5, null = not a photo), tagged }
+  let rateFilter = $state("any"); // any | "1".."5" (at least) | none | tagged  (this session only)
   let failedThumbs = $state(new Set());
   let samples = $state({}); // folder id -> [ids]
   let area = $state(); // the file area element
@@ -126,9 +133,83 @@
   let entries = $derived.by(() => {
     const l = browser.listing?.entries ?? [];
     const f = browser.filter.trim().toLowerCase();
-    const shown = l.filter((e) => (bprefs.show === "all" || e.dir || MEDIA.has(e.kind)) && (!f || e.name.toLowerCase().includes(f)));
-    return sortEntries(shown, bprefs.sortBy, bprefs.sortDesc);
+    const shown = l.filter((e) => (bprefs.show === "all" || e.dir || MEDIA.has(e.kind)) && (!f || e.name.toLowerCase().includes(f)) && passRating(e));
+    return sortEntries(shown, bprefs.sortBy, bprefs.sortDesc, (e) => marks[e.id]?.rating ?? -1);
   });
+  function passRating(e) {
+    if (rateFilter === "any" || e.dir) return true;
+    const m = marks[e.id];
+    if (rateFilter === "tagged") return !!m?.tagged;
+    if (rateFilter === "none") return m?.rating === 0;
+    return (m?.rating ?? 0) >= +rateFilter;
+  }
+
+  // ---------- stars and tags ----------
+  // Read for every listed file after the folder opens (in parts, so big folders fill in as they go).
+  $effect(() => {
+    const l = browser.listing;
+    if (!l) { marks = {}; return; }
+    loadMarks(l.entries.filter((e) => !e.dir).map((e) => e.id), l);
+  });
+  async function loadMarks(ids, l) {
+    const out = {};
+    for (let i = 0; i < ids.length; i += 300) {
+      const part = await readMarks(ids.slice(i, i + 300)).catch(() => []);
+      if (browser.listing !== l) return; // another folder by now
+      for (const m of part) out[m.id] = m;
+      marks = { ...out };
+    }
+    if (!ids.length) marks = {};
+  }
+  const ratable = () => selEntries.filter((e) => marks[e.id]?.rating != null);
+  async function rate(stars) {
+    const list = ratable();
+    const skipped = selEntries.filter((e) => !e.dir).length - list.length;
+    const skipNote = skipped ? ` · ${plural(skipped, "file was", "files were")} left out (stars are for photos only)` : "";
+    if (!list.length) return say("Select one or more photos to give them stars (keys 1–5, 0 removes the stars). Videos and other files cannot have stars.");
+    const ids = list.map((e) => e.id);
+    if (ids.length > 3) job = { title: stars ? `Giving ${starText(stars)} to ${ids.length} photos…` : `Removing the stars from ${ids.length} photos…`, prog: null, cancel: false };
+    try {
+      const r = await setRating(ids, stars);
+      const msg = [];
+      if (r.done) msg.push(stars ? `${starText(stars)} saved in ${plural(r.done, "photo", "photos")}` : `Stars removed from ${plural(r.done, "photo", "photos")}`);
+      if (r.unchanged) msg.push(`${plural(r.unchanged, "photo already had", "photos already had")} ${stars ? "these stars" : "no stars"}`);
+      if (r.failed.length) msg.push(`not possible for ${r.failed.map(([n, why]) => `${n} (${why})`).join(", ")}`);
+      say(msg.join(" · ") + skipNote + (r.done ? " (Ctrl+Z undoes)" : ""));
+    } catch (err) {
+      say(String(err));
+    } finally {
+      job = null;
+    }
+    await quietRefresh();
+  }
+  async function toggleTag() {
+    const ids = selEntries.filter((e) => !e.dir).map((e) => e.id);
+    if (!ids.length) return say("Select files to tag them (Q).");
+    const on = !ids.every((id) => marks[id]?.tagged);
+    try {
+      await setTagged(ids, on);
+      const m = { ...marks };
+      for (const id of ids) m[id] = { ...(m[id] ?? { id, rating: null }), tagged: on };
+      marks = m;
+      say(on ? `${plural(ids.length, "file", "files")} tagged. To see only tagged files, choose “Tagged” in the stars list at the top.` : `Tag removed from ${plural(ids.length, "file", "files")}.`);
+    } catch (err) {
+      say(String(err));
+    }
+  }
+  // Re-read the folder (new file sizes) but keep the selection and the scroll position.
+  async function quietRefresh() {
+    const top = area?.scrollTop ?? 0;
+    const names = new Set(selEntries.map((e) => e.name.toLowerCase()));
+    const anchor = entries.find((e) => e.id === browser.anchor)?.name.toLowerCase();
+    await navigate(browser.path, { push: false });
+    browser.selected = entries.filter((e) => names.has(e.name.toLowerCase())).map((e) => e.id);
+    browser.anchor = entries.find((e) => e.name.toLowerCase() === anchor)?.id ?? browser.selected[0] ?? null;
+    await tick();
+    if (area) area.scrollTop = top;
+    undoLabel = await lastUndo().catch(() => null);
+    area?.focus();
+  }
   let selSet = $derived(new Set(browser.selected));
   let selEntries = $derived(entries.filter((e) => selSet.has(e.id)));
   let one = $derived(selEntries.length === 1 ? selEntries[0] : null);
@@ -191,6 +272,25 @@
     revealItem(e.id).catch((err) => say(String(err)));
   }
 
+  // Compare side by side: 2–4 selected photos (or videos: their first frame).
+  const compareable = () => selEntries.filter((x) => MEDIA.has(x.kind));
+  function startCompare() {
+    const m = compareable();
+    if (m.length < 2 || m.length > 4) return say("Select 2 to 4 photos to compare them side by side (Ctrl+click to add one).");
+    compare = m.map((x) => ({ id: x.id, name: x.name, size: x.size, modified: x.modified }));
+  }
+
+  // Slideshow: the selected photos when 2 or more are selected, otherwise every
+  // photo and video in this folder (as sorted and filtered), from the selected one.
+  function startSlideshow() {
+    const sel = selEntries.filter((x) => MEDIA.has(x.kind));
+    const all = entries.filter((x) => MEDIA.has(x.kind));
+    const list = sel.length >= 2 ? sel : all;
+    if (!list.length) return say("There are no photos or videos in this folder for a slideshow.");
+    const from = sel.length === 1 ? list.findIndex((x) => x.id === sel[0].id) : 0;
+    slideshow = { items: list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, modified: x.modified })), start: Math.max(0, from) };
+  }
+
   function columns() {
     if (bprefs.view === "details" || bprefs.view === "list") return 1;
     const first = area?.querySelector(".cell");
@@ -216,7 +316,7 @@
   }
 
   function onAreaKey(ev) {
-    if (menu || viewer) return;
+    if (menu || viewer || compare || slideshow) return;
     const k = ev.key;
     const ctrl = ev.ctrlKey || ev.metaKey;
     if (k === "ArrowRight" && bprefs.view !== "details") moveSel(1, ev);
@@ -228,8 +328,12 @@
     else if (k === "Enter" && one) openEntry(one);
     else if (k === "Backspace") goUp();
     else if (ctrl && (k === "a" || k === "A")) browser.selected = entries.map((e) => e.id);
+    else if ((k === "p" || k === "P") && !ctrl) startCompare();
+    else if ((k === "s" || k === "S") && !ctrl) startSlideshow();
     else if (!browser.path || job) return;
     // housekeeping keys
+    else if (/^[0-5]$/.test(k) && !ev.altKey && !ev.shiftKey) rate(+k);
+    else if ((k === "q" || k === "Q") && !ctrl) toggleTag();
     else if (k === "F2") doRename();
     else if (k === "Delete") doDelete(ev.shiftKey);
     else if (k === "F8" || (ctrl && ev.shiftKey && (k === "N" || k === "n"))) doNewFolder();
@@ -241,7 +345,7 @@
   }
 
   function onWindowKey(ev) {
-    if (!active || menu || viewer || document.querySelector("dialog[open]")) return;
+    if (!active || menu || viewer || compare || slideshow || document.querySelector("dialog[open]")) return;
     if (ev.key === "F5") { ev.preventDefault(); refresh(); }
     else if (ev.altKey && ev.key === "ArrowLeft") { ev.preventDefault(); goBack(); }
     else if (ev.altKey && ev.key === "ArrowRight") { ev.preventDefault(); goForward(); }
@@ -312,6 +416,19 @@
       items.push({ label: "Show in Explorer", icon: "explorer", action: () => revealItem(e.id).catch((x) => say(String(x))) });
     } else {
       if (MEDIA.has(e.kind)) items.push({ label: "View full screen", icon: "fullscreen", key: "Enter", bold: true, action: () => openEntry(e) });
+      if (MEDIA.has(e.kind)) {
+        const n = selEntries.filter((x) => MEDIA.has(x.kind)).length;
+        items.push({ label: n >= 2 ? `Slideshow of these ${n}` : "Slideshow from here", icon: "slideshow", key: "S", action: startSlideshow });
+      }
+      const m = compareable().length;
+      if (m >= 2) items.push({ label: m <= 4 ? `Compare ${m} side by side` : "Compare side by side (2 to 4)", icon: "compare", key: "P", disabled: m > 4, action: startCompare });
+      const r = ratable();
+      if (r.length) {
+        const same = r.every((x) => marks[x.id].rating === marks[r[0].id].rating) ? marks[r[0].id].rating : -1;
+        items.push({ stars: same, label: r.length > 1 ? `Stars for ${r.length} photos` : "Stars", action: rate });
+      }
+      const tagged = selEntries.some((x) => !x.dir) && selEntries.filter((x) => !x.dir).every((x) => marks[x.id]?.tagged);
+      items.push({ label: tagged ? "Remove the tag" : "Tag", icon: "tag", key: "Q", action: toggleTag });
       items.push({ label: "Show in Explorer", icon: "explorer", action: () => revealItem(e.id).catch((x) => say(String(x))) });
       items.push("-", ...toolItems(browser.path).map((t) => ({ ...t, label: t.label.replace("this folder", "the whole folder").replace(" here", " in this folder") })));
     }
@@ -326,7 +443,8 @@
     menu = {
       x: ev.clientX, y: ev.clientY,
       items: [
-        ...toolItems(browser.path), "-",
+        ...toolItems(browser.path),
+        { label: "Slideshow of this folder", icon: "slideshow", key: "S", action: startSlideshow }, "-",
         { label: clip ? `Paste ${plural(clip.ids.length, "item", "items")} here` : "Paste", key: "Ctrl+V", disabled: !clip, action: () => paste() },
         { label: "New folder", icon: "folder", key: "F8", action: doNewFolder },
         { label: undoLabel ? `Undo: ${undoLabel}` : "Undo", key: "Ctrl+Z", disabled: !undoLabel, action: doUndo },
@@ -585,15 +703,24 @@
       <button class="ib" class:on={bprefs.view === "list"} title="List" onclick={() => setPref("view", "list")}><Icon name="list" /></button>
       <button class="ib" class:on={bprefs.view === "details"} title="Details" onclick={() => setPref("view", "details")}><Icon name="details" /></button>
     </div>
+    <button class="ib" title="Slideshow (S): the selected photos, or the whole folder" onclick={startSlideshow} disabled={!browser.path}><Icon name="slideshow" /></button>
     <select class="sel" value={bprefs.show} onchange={(e) => setPref("show", e.currentTarget.value)} title="Which files to show">
       <option value="all">All files</option>
       <option value="media">Photos & videos</option>
+    </select>
+    <select class="sel" class:on={rateFilter !== "any"} value={rateFilter} onchange={(e) => (rateFilter = e.currentTarget.value)} title="Show only photos with these stars, or tagged files">
+      <option value="any">Any stars</option>
+      {#each [1, 2, 3, 4] as n}<option value={String(n)}>{"★".repeat(n)} or more</option>{/each}
+      <option value="5">★★★★★ only</option>
+      <option value="none">No stars yet</option>
+      <option value="tagged">Tagged</option>
     </select>
     <select class="sel" value={bprefs.sortBy} onchange={(e) => { bprefs.sortBy = e.currentTarget.value; saveBrowserPrefs(); }} title="Sort by">
       <option value="name">Name</option>
       <option value="date">Date modified</option>
       <option value="size">Size</option>
       <option value="type">Type</option>
+      <option value="rating">Stars</option>
     </select>
     <button class="ib" title={bprefs.sortDesc ? "Descending (click for ascending)" : "Ascending (click for descending)"} onclick={() => setPref("sortDesc", !bprefs.sortDesc)}>
       <Icon name={bprefs.sortDesc ? "sort-desc" : "sort-asc"} />
@@ -641,7 +768,12 @@
             {:else if one}
               <Icon name={one.dir ? "folder" : one.kind} size={72} />
             {:else if selEntries.length > 1}
-              <span class="muted">{plural(selEntries.length, "item", "items")} selected</span>
+              <div class="multi">
+                <span class="muted">{plural(selEntries.length, "item", "items")} selected</span>
+                {#if compareable().length >= 2 && compareable().length <= 4}
+                  <button onclick={startCompare} title="Compare side by side (P)"><Icon name="compare" size={16} /> Compare side by side</button>
+                {/if}
+              </div>
             {:else}
               <span class="muted">Select a photo to preview it</span>
             {/if}
@@ -698,7 +830,7 @@
         <table class="det">
           <thead>
             <tr>
-              {#each [["name", "Name"], ["type", "Type"], ["size", "Size"], ["date", "Date modified"]] as [k, t]}
+              {#each [["name", "Name"], ["type", "Type"], ["size", "Size"], ["date", "Date modified"], ["rating", "Stars"]] as [k, t]}
                 <th class:num={k === "size"} onclick={() => sortByCol(k)}>
                   {t}{#if bprefs.sortBy === k}<span class="arrow">{bprefs.sortDesc ? "▼" : "▲"}</span>{/if}
                 </th>
@@ -715,6 +847,7 @@
                 <td>{typeLabel(e)}</td>
                 <td class="num">{e.dir ? "" : formatBytes(e.size)}</td>
                 <td>{fmtDate(e.modified)}</td>
+                <td class="stars-td">{#if marks[e.id]?.rating}<span class="stars" title="{marks[e.id].rating} of 5 stars">{"★".repeat(marks[e.id].rating)}</span>{/if}{#if marks[e.id]?.tagged}<span class="tagdot" title="Tagged">●</span>{/if}</td>
               </tr>
             {/each}
           </tbody>
@@ -742,9 +875,11 @@
                     {:else if thumbable(e)}
                       <img src={fthumbUrl(e.id, bprefs.size)} alt="" loading="lazy" decoding="async" onerror={() => thumbFailed(e.id)} />
                       {#if e.kind === "video"}<span class="play" aria-hidden="true">▶</span>{/if}
+                      {#if marks[e.id]?.rating}<span class="ostars" title="{marks[e.id].rating} of 5 stars">{"★".repeat(marks[e.id].rating)}</span>{/if}
                     {:else}
                       <Icon name={e.kind} size={SIZE_PX[bprefs.size] * 0.55} />
                     {/if}
+                    {#if marks[e.id]?.tagged}<span class="otag" title="Tagged (Q)"><Icon name="tag" size={14} /></span>{/if}
                   </div>
                   {#if !e.dir && bprefs.size !== "s"}
                     <div class="strip"><span>{e.size ? formatBytes(e.size) : ""}</span><span>{typeLabel(e)}</span></div>
@@ -761,10 +896,11 @@
                     <span class="name">{e.name}</span>
                     <small class="muted">{typeLabel(e)}{e.dir ? "" : " · " + formatBytes(e.size)}</small>
                     <small class="muted">{fmtDate(e.modified)}</small>
+                    {#if marks[e.id]?.rating || marks[e.id]?.tagged}<small>{#if marks[e.id]?.rating}<span class="stars">{"★".repeat(marks[e.id].rating)}</span>{/if}{#if marks[e.id]?.tagged}<span class="tagdot" title="Tagged">● tagged</span>{/if}</small>{/if}
                   </div>
                 </div>
               {:else}
-                <div class="li"><Icon name={e.dir ? "folder" : e.kind} size={16} /><span class="name">{e.name}</span></div>
+                <div class="li"><Icon name={e.dir ? "folder" : e.kind} size={16} /><span class="name">{e.name}</span>{#if marks[e.id]?.rating}<span class="stars">{"★".repeat(marks[e.id].rating)}</span>{/if}{#if marks[e.id]?.tagged}<span class="tagdot" title="Tagged">●</span>{/if}</div>
               {/if}
             </div>
           {/each}
@@ -828,6 +964,10 @@
         <div class="pbar"><i style="width:{(100 * job.prog.bytes_done) / job.prog.bytes_total}%"></i></div>
         <span class="muted">{job.prog.files_done} of {job.prog.files_total} files · {formatBytes(job.prog.bytes_done)} of {formatBytes(job.prog.bytes_total)}</span>
         <span class="muted cur">{job.prog.current}</span>
+      {:else if job.prog && job.prog.files_total}
+        <div class="pbar"><i style="width:{(100 * job.prog.files_done) / job.prog.files_total}%"></i></div>
+        <span class="muted">{job.prog.files_done} of {job.prog.files_total} photos</span>
+        <span class="muted cur">{job.prog.current}</span>
       {:else}
         <div class="pbar busy"><i></i></div>
       {/if}
@@ -835,6 +975,13 @@
     </div>
   </div>
 {/if}
+{#if slideshow}<Slideshow items={slideshow.items} start={slideshow.start} onclose={(last) => {
+  slideshow = null;
+  const e = entries.find((x) => x.id === last);
+  if (e) { browser.selected = [last]; browser.anchor = last; tick().then(() => area?.querySelector(`[data-id="${last}"]`)?.scrollIntoView({ block: "nearest" })); }
+  area?.focus();
+}} />{/if}
+{#if compare}<Compare items={compare} onclose={() => { compare = null; area?.focus(); }} />{/if}
 {#if viewer}<Viewer items={viewer.items} index={viewer.index} onchanged={() => (viewerChanged = true)} onclose={async (last) => {
   viewer = null;
   if (viewerChanged) {
@@ -849,6 +996,15 @@
 }} />{/if}
 
 <style>
+  .ostars { position: absolute; bottom: 8px; left: 8px; background: rgba(0, 0, 0, 0.6); color: #ffc83d; font-size: 12px; letter-spacing: 1px; border-radius: 4px; padding: 0 5px; pointer-events: none; }
+  .otag { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-text); pointer-events: none; }
+  .stars { color: #e0a800; letter-spacing: 1px; white-space: nowrap; }
+  .tagdot { color: var(--accent); margin-left: 4px; }
+  .li .stars { margin-left: 6px; font-size: 11px; }
+  .stars-td { white-space: nowrap; }
+  select.sel.on { border-color: var(--accent); background: var(--accent-soft); }
+  .multi { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .multi button { display: inline-flex; align-items: center; gap: 6px; }
   .browser { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
   /* toolbar */
   .tb { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }

@@ -290,7 +290,7 @@ fn cache_key(p: &Path, m: &std::fs::Metadata) -> String {
     h.finalize().to_hex()[..32].to_string()
 }
 
-fn real_format(p: &Path) -> cs_scan::Format {
+pub(crate) fn real_format(p: &Path) -> cs_scan::Format {
     use std::io::Read;
     let mut head = [0u8; 512];
     let n = std::fs::File::open(p).and_then(|mut f| f.read(&mut head)).unwrap_or(0);

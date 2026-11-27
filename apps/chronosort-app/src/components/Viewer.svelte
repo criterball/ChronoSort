@@ -2,10 +2,15 @@
   import { onMount, tick } from "svelte";
   import Icon from "./Icon.svelte";
   import InfoPanel from "./InfoPanel.svelte";
+  import AdjustPanel from "./AdjustPanel.svelte";
+  import RetouchPanel from "./RetouchPanel.svelte";
+  import EffectsPanel from "./EffectsPanel.svelte";
+  import RetouchOverlay from "./RetouchOverlay.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     fthumbUrl, revealItem, formatBytes, confirmBox, imageSize,
-    editOpen, editApply, editStepBack, editClose, editSave, editUrl,
+    editOpen, editApply, editStepBack, editClose, editSave, editUrl, editSetDpi, editRetouch,
+    readMarks, setRating, setTagged, starText,
   } from "../lib/api.js";
 
   // items: browser entries (photos and videos of the folder); index: the one to show first.
@@ -34,6 +39,15 @@
   let crop = $state(null); // { ratio, sel: {x,y,w,h} in screen px }
   let resize = $state(null); // { w, h, keep }
   let saveDlg = $state(null); // { mode, format, quality }
+  let adjusting = $state(false); // the colour and light panel is open
+  let effecting = $state(false); // the frame and watermark panel is open
+  let straight = $state(null); // { angle, frame: {x,y,w,h}, draw, line: {x1,y1,x2,y2} | null }
+  let canvasDlg = $state(null); // { w, h, anchor, color }
+  let dpiDlg = $state(null); // { dpi }
+  let rt = $state(null); // retouch tools state, shared by RetouchPanel and RetouchOverlay
+  let rtRect = $state(null); // the picture on screen while retouching
+  // Something is changed and not saved: edit steps or colour / light adjustments.
+  let dirty = $derived(!!edit && (edit.edits > 0 || edit.adjusted || edit.has_effects || edit.dpi != null));
   let imgEl = $state();
   let stripEl = $state();
   let full = $state(false); // the window is full screen
@@ -97,13 +111,18 @@
   });
 
   async function leaveEdits() {
-    if (!edit || !edit.edits) return true;
+    if (!dirty) return true;
     const ok = await confirmBox("The changes to this picture are not saved.\n\nLeave them?", "Unsaved changes", "Leave them", "Keep editing");
     if (ok) await dropEdits();
     return ok;
   }
   async function dropEdits() {
     edit = null;
+    adjusting = effecting = false;
+    straight = null;
+    canvasDlg = null;
+    dpiDlg = null;
+    rt = null;
     crop = null;
     resize = null;
     saveDlg = null;
@@ -128,12 +147,51 @@
     if (id == null) return;
     imageSize(id).then((r) => { if (cur?.id === id) fullSize = r; }).catch(() => {});
   });
+  // Stars (in the photo) and the tag mark of the current file.
+  let mark = $state(null); // { rating, tagged }
+  $effect(() => {
+    const id = cur?.id;
+    mark = null;
+    if (id == null) return;
+    readMarks([id]).then(([m]) => { if (cur?.id === id) mark = m ?? null; }).catch(() => {});
+  });
+  async function rateCur(stars) {
+    if (mark?.rating == null) return say("Stars can be given to photos only.");
+    if (dirty) return say("Save or leave the changes to this picture first, then give it stars.");
+    if (busy) return;
+    busy = true;
+    try {
+      const r = await setRating([cur.id], stars);
+      if (r.failed.length) say(`Not possible: ${r.failed[0][1]}`);
+      else {
+        mark = { ...mark, rating: stars };
+        say(stars ? `${starText(stars)} saved in the photo (Ctrl+Z in the browser undoes)` : "Stars removed");
+        if (r.done) onchanged?.("rated");
+      }
+    } catch (e) {
+      say(String(e));
+    } finally {
+      busy = false;
+    }
+  }
+  async function tagCur() {
+    if (!mark) return;
+    const on = !mark.tagged;
+    try {
+      await setTagged([cur.id], on);
+      mark = { ...mark, tagged: on };
+      say(on ? "Tagged" : "Tag removed");
+      onchanged?.("tagged");
+    } catch (e) {
+      say(String(e));
+    }
+  }
   const next = () => show(i + 1);
   const prev = () => show(i - 1);
   let closing = false;
   async function close(fromFullscreenExit = false) {
     if (closing) return;
-    if (edit?.edits && !fromFullscreenExit && !(await leaveEdits())) return;
+    if (dirty && !fromFullscreenExit && !(await leaveEdits())) return;
     closing = true;
     onclose(cur?.id ?? null);
   }
@@ -142,9 +200,11 @@
     if (!el || !natural.w) return 1;
     return Math.min(1, el.clientWidth / natural.w, el.clientHeight / natural.h);
   }
+  // Crop, straighten and retouch place marks on the picture itself: show it without frame / watermark.
+  let rawView = $derived(!!(edit?.has_effects && (crop || straight || rt)));
   // The real picture's size, upright like the shown image (an EXIF turn swaps the stored size).
   let real = $derived.by(() => {
-    if (edit) return { w: edit.width, h: edit.height };
+    if (edit) return rawView ? { w: edit.width, h: edit.height } : { w: edit.out_width, h: edit.out_height };
     if (!fullSize || !natural.w) return null;
     const { w, h } = fullSize;
     return natural.w > natural.h !== w > h && natural.w !== natural.h ? { w: h, h: w } : { w, h };
@@ -283,6 +343,150 @@
     if (p && p.w > 0 && p.h > 0) await doEdit({ op: "crop", ...p });
   }
 
+  async function startAdjust() {
+    if (!(await ensureEdit())) return;
+    crop = null;
+    resize = null;
+    saveDlg = null;
+    effecting = false;
+    adjusting = true;
+    pinned = "left";
+  }
+  async function startEffects() {
+    if (!(await ensureEdit())) return;
+    crop = resize = saveDlg = straight = canvasDlg = dpiDlg = rt = null;
+    adjusting = false;
+    effecting = true;
+    pinned = "left";
+  }
+
+  // ---- straighten: live preview by CSS, the real turn on Apply ----
+  // The largest rectangle of the picture's shape inside it when turned (same as the backend).
+  function straightScale(w, h, deg) {
+    const r = (Math.abs(deg) * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
+    return Math.min(w / (w * c + h * s), h / (w * s + h * c));
+  }
+  async function startStraighten() {
+    if (!(await ensureEdit())) return;
+    crop = resize = saveDlg = canvasDlg = dpiDlg = null;
+    adjusting = effecting = false;
+    fit();
+    await new Promise((r) => setTimeout(r, 60));
+    const b = imgEl?.getBoundingClientRect();
+    if (!b) return;
+    straight = { angle: 0, frame: { x: b.left, y: b.top, w: b.width, h: b.height }, draw: false, line: null };
+    pinned = "left";
+  }
+  function setAngle(v) {
+    straight.angle = Math.max(-45, Math.min(45, Math.round((+v || 0) * 10) / 10));
+  }
+  // Draw a line along something that should be level (or upright): the angle follows from it.
+  function lineDown(ev) {
+    ev.preventDefault();
+    const p = { x: ev.clientX, y: ev.clientY };
+    straight.line = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+    const move = (e) => { straight.line.x2 = e.clientX; straight.line.y2 = e.clientY; };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      const l = straight.line;
+      const dx = l.x2 - l.x1, dy = l.y2 - l.y1;
+      if (Math.hypot(dx, dy) > 20) {
+        let a = (Math.atan2(dy, dx) * 180) / Math.PI; // screen angle of the line
+        if (a > 90) a -= 180;
+        if (a <= -90) a += 180;
+        // Nearer horizontal: make it level; nearer vertical: make it upright.
+        const need = Math.abs(a) <= 45 ? -a : (a > 0 ? 90 - a : -90 - a);
+        setAngle(straight.angle + need);
+      }
+      straight.line = null;
+      straight.draw = false;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+  async function applyStraighten() {
+    const a = straight.angle;
+    straight = null;
+    pinned = "";
+    if (a) await doEdit({ op: "straighten", angle100: Math.round(a * 100) });
+  }
+  let straightStyle = $derived(straight && natural.w
+    ? `transform: translate(-50%, -50%) rotate(${straight.angle}deg) scale(${1 / straightScale(natural.w, natural.h, straight.angle)})`
+    : "");
+
+  // ---- retouch (red eye, heal, clone, draw) ----
+  async function startRetouch() {
+    if (!(await ensureEdit())) return;
+    crop = resize = saveDlg = straight = canvasDlg = dpiDlg = null;
+    adjusting = effecting = false;
+    fit();
+    await new Promise((r) => setTimeout(r, 80));
+    const b = imgEl?.getBoundingClientRect();
+    if (!b) return;
+    rtRect = { x: b.left, y: b.top, w: b.width, h: b.height };
+    rt = { tool: "heal", size: 18, hardness: 50, pupil: 50, darken: 50, src: null, offset: null, pickSource: false,
+      shape: "pen", color: "#ffffff", width: 6, font: 48, text: "", layer: null, drew: false, busy: false, hint: "" };
+    pinned = "left";
+  }
+  async function applyRetouch(op) {
+    rt.busy = true;
+    rt.hint = "";
+    try {
+      edit = await editRetouch(op);
+      return true;
+    } catch (e) {
+      say(String(e));
+      return false;
+    } finally {
+      if (rt) rt.busy = false;
+    }
+  }
+
+  // ---- canvas size ----
+  async function startCanvas() {
+    if (!(await ensureEdit())) return;
+    crop = resize = saveDlg = straight = dpiDlg = null;
+    adjusting = effecting = false;
+    canvasDlg = { w: edit.width, h: edit.height, anchor: 4, color: "#ffffff" };
+    pinned = "left";
+  }
+  function border(pct) {
+    const b = Math.round((Math.min(edit.width, edit.height) * pct) / 100);
+    canvasDlg.w = edit.width + 2 * b;
+    canvasDlg.h = edit.height + 2 * b;
+    canvasDlg.anchor = 4;
+  }
+  async function applyCanvas() {
+    const c = canvasDlg;
+    const hex = c.color.replace("#", "");
+    const color = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) || 0);
+    canvasDlg = null;
+    pinned = "";
+    await doEdit({ op: "canvas", w: Math.max(1, Math.round(+c.w)), h: Math.max(1, Math.round(+c.h)), anchor: c.anchor, color });
+  }
+
+  // ---- print size (DPI) ----
+  async function startDpi() {
+    if (!(await ensureEdit())) return;
+    crop = resize = saveDlg = straight = canvasDlg = null;
+    adjusting = effecting = false;
+    dpiDlg = { dpi: edit.dpi ?? Math.round(edit.dpi_original ?? 300) };
+    pinned = "left";
+  }
+  async function applyDpi(clear = false) {
+    const v = clear ? null : Math.round(+dpiDlg.dpi);
+    try {
+      edit = await editSetDpi(v);
+      dpiDlg = null;
+      pinned = "";
+      if (v) say(`The picture will be saved for printing at ${v} dots per inch.`);
+    } catch (e) {
+      say(String(e));
+    }
+  }
+  const printSize = (px, dpi) => `${((px / dpi) * 2.54).toFixed(1)} cm (${(px / dpi).toFixed(1)} in)`;
+
   async function startResize() {
     if (!(await ensureEdit())) return;
     resize = { w: edit.width, h: edit.height, keep: true };
@@ -337,15 +541,22 @@
     }
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
     if (k === "Escape") {
-      if (crop || resize || saveDlg) { crop = resize = saveDlg = null; pinned = ""; }
+      if (crop || resize || saveDlg || adjusting || effecting || straight || canvasDlg || dpiDlg || rt) {
+        crop = resize = saveDlg = straight = canvasDlg = dpiDlg = rt = null;
+        adjusting = effecting = false;
+        pinned = "";
+      }
       else if (pinned) pinned = "";
       else close();
     } else if (k === "Enter" && crop) applyCrop();
+    else if (k === "Enter" && straight) applyStraighten();
     else if (k === "Enter") close();
     else if (ctrl && (k === "r" || k === "R")) startResize();
     else if (ctrl && (k === "s" || k === "S")) startSave();
     else if (ctrl && (k === "z" || k === "Z")) stepBack();
+    else if (ctrl && /^[0-5]$/.test(k)) rateCur(+k);
     else if (ctrl) return;
+    else if (k === "q" || k === "Q") tagCur();
     else if (k === "ArrowRight" || k === "PageDown" || k === " ") next();
     else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") prev();
     else if (k === "Home") show(0);
@@ -360,6 +571,10 @@
     else if (k === "h" || k === "H") doEdit({ op: "flip_horizontal" });
     else if (k === "v" || k === "V") doEdit({ op: "flip_vertical" });
     else if (k === "x" || k === "X") startCrop();
+    else if (k === "c" || k === "C") startAdjust();
+    else if (k === "t" || k === "T") startStraighten();
+    else if (k === "e" || k === "E") startRetouch();
+    else if (k === "f" || k === "F") startEffects();
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -405,12 +620,22 @@
     return { x: Math.max(0, left / W), y: Math.max(0, top / H), w: Math.min(1, vw / W), h: Math.min(1, vh / H) };
   });
   function navTo(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
     const r = ev.currentTarget.getBoundingClientRect();
-    const fx = (ev.clientX - r.left) / r.width, fy = (ev.clientY - r.top) / r.height;
-    pan = { x: -(fx - 0.5) * natural.w * zoom, y: -(fy - 0.5) * natural.h * zoom };
+    const go = (e) => {
+      const fx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      const fy = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      pan = { x: -(fx - 0.5) * natural.w * zoom, y: -(fy - 0.5) * natural.h * zoom };
+    };
+    go(ev);
+    // Keep following the pointer while the button is held: drag the view around.
+    const up = () => { window.removeEventListener("pointermove", go); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", go);
+    window.addEventListener("pointerup", up);
   }
 
-  let src = $derived(edit ? editUrl(`${cur.id}-${edit.version}`) : cur ? fthumbUrl(cur.id, hiRes ? "o" : "p") : "");
+  let src = $derived(edit ? editUrl(`${cur.id}-${edit.version}${rawView ? "-raw" : ""}`) : cur ? fthumbUrl(cur.id, hiRes ? "o" : "p") : "");
   let pre = $derived(items.length > 1 ? [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]] : []);
   const ZOOMS = [10, 25, 50, 75, 100, 150, 200, 300, 400];
 </script>
@@ -422,7 +647,7 @@
   {#if cur}
     {#if !failed}
       <img bind:this={imgEl} class="photo" class:fit={!zoom} {src} alt={cur.name} draggable="false"
-        style={zoom ? `transform: translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom}); width:${natural.w}px; height:${natural.h}px` : ""}
+        style={zoom ? `transform: translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom}); width:${natural.w}px; height:${natural.h}px` : straightStyle}
         onload={imgLoaded}
         onerror={() => (hiRes ? (hiRes = false) : (failed = true))} />
     {:else}
@@ -430,7 +655,9 @@
     {/if}
     <div class="info">
       {cur.name} &nbsp;( {real ? `${real.w} × ${real.h}` : natural.w ? `${natural.w} × ${natural.h} preview` : "…"}, {formatBytes(cur.size)} ) &nbsp;[ {i + 1} / {items.length} ] &nbsp;{pct ? pct + "%" : ""}
-      {#if edit?.edits}<span class="unsaved">● edited, not saved yet</span>{/if}
+      {#if mark?.rating}<span class="vstars" title="{mark.rating} of 5 stars (Ctrl+0–5)">{"★".repeat(mark.rating)}</span>{/if}
+      {#if mark?.tagged}<span class="vtag">● tagged</span>{/if}
+      {#if dirty}<span class="unsaved">● edited, not saved yet</span>{/if}
     </div>
   {/if}
   {#each pre as p (p.id)}<link rel="prefetch" href={fthumbUrl(p.id, "p")} />{/each}
@@ -456,6 +683,21 @@
     </div>
   {/if}
 
+  {#if rt && rtRect && edit}
+    <RetouchOverlay {rt} rect={rtRect} imgW={edit.width} imgH={edit.height} onapply={applyRetouch} />
+  {/if}
+
+  <!-- straighten: the frame that will be kept, with a grid; drawing layer for the level line -->
+  {#if straight}
+    <div class="sframe" style="left:{straight.frame.x}px; top:{straight.frame.y}px; width:{straight.frame.w}px; height:{straight.frame.h}px"></div>
+    {#if straight.draw}
+      <div class="shade" role="presentation" onpointerdown={lineDown}></div>
+    {/if}
+    {#if straight.line}
+      <svg class="sline"><line x1={straight.line.x1} y1={straight.line.y1} x2={straight.line.x2} y2={straight.line.y2} /></svg>
+    {/if}
+  {/if}
+
   <!-- TOP: thumbnail strip -->
   <div class="fly top" class:open={open("top")} onpointerleave={() => (edge = "")} role="group" aria-label="Photos in this folder">
     <div class="tophead">
@@ -473,8 +715,59 @@
   </div>
 
   <!-- LEFT: picture actions + edit forms -->
-  <div class="fly left" class:open={open("left")} onpointerleave={() => (edge = "")} role="group" aria-label="Edit">
-    {#if crop}
+  <div class="fly left" class:wide={adjusting || effecting || rt} class:open={open("left")} onpointerleave={() => (edge = "")} role="group" aria-label="Edit">
+    {#if rt}
+      <RetouchPanel {rt} onapply={applyRetouch} onclose={() => { rt = null; pinned = ""; }} />
+    {:else if straight}
+      <h3>Straighten</h3>
+      <p class="hint">Turn the picture until it is level; the corners are cropped so nothing is left blank.</p>
+      <label class="fld">Angle {straight.angle.toFixed(1)}°
+        <input type="range" min="-45" max="45" step="0.1" value={straight.angle} oninput={(e) => setAngle(e.currentTarget.value)}
+          ondblclick={() => setAngle(0)} />
+      </label>
+      <div class="pcts">
+        {#each [-1, -0.1, 0.1, 1] as d}<button onclick={() => setAngle(straight.angle + d)}>{d > 0 ? "+" : "−"}{Math.abs(d)}°</button>{/each}
+      </div>
+      <button class="wide-btn" class:on={straight.draw} onclick={() => (straight.draw = !straight.draw)}>
+        {straight.draw ? "Now drag along the horizon…" : "Draw a level line"}</button>
+      <p class="hint">Drag along something that should be level (a horizon, a table edge) or upright (a wall, a door).</p>
+      <div class="row2"><button onclick={() => { straight = null; pinned = ""; }}>Cancel</button><button class="primary" onclick={applyStraighten}>Straighten <kbd>Enter</kbd></button></div>
+    {:else if canvasDlg}
+      <h3>Canvas size</h3>
+      <p class="hint">Now {edit.width} × {edit.height} pixels. A bigger canvas adds a border; a smaller one trims the picture.</p>
+      <div class="pcts">{#each [2, 5, 10] as p}<button onclick={() => border(p)}>Border {p}%</button>{/each}</div>
+      <div class="wh">
+        <label class="fld">Width <input type="number" min="1" bind:value={canvasDlg.w} /></label>
+        <label class="fld">Height <input type="number" min="1" bind:value={canvasDlg.h} /></label>
+      </div>
+      <span class="hint">Picture position</span>
+      <div class="anchors">
+        {#each Array(9) as _, n}<button class:on={canvasDlg.anchor === n} aria-label="Position {n + 1}" onclick={() => (canvasDlg.anchor = n)}></button>{/each}
+      </div>
+      <label class="fld">Border colour
+        <span class="swatches">
+          {#each ["#ffffff", "#000000", "#808080"] as c}<button class="sw" class:on={canvasDlg.color === c} style="background:{c}" aria-label={c} onclick={() => (canvasDlg.color = c)}></button>{/each}
+          <input type="color" bind:value={canvasDlg.color} />
+        </span>
+      </label>
+      <div class="row2"><button onclick={() => { canvasDlg = null; pinned = ""; }}>Cancel</button><button class="primary" onclick={applyCanvas}>Apply</button></div>
+    {:else if dpiDlg}
+      <h3>Print size</h3>
+      <p class="hint">{edit.dpi_original ? `The file says ${Math.round(edit.dpi_original)} dots per inch.` : "The file does not say how big to print."} This only changes how big the picture prints; the pixels stay the same.</p>
+      <label class="fld">Dots per inch (DPI) <input type="number" min="1" max="10000" bind:value={dpiDlg.dpi} /></label>
+      <div class="pcts">{#each [72, 150, 300, 600] as v}<button class:on={+dpiDlg.dpi === v} onclick={() => (dpiDlg.dpi = v)}>{v}</button>{/each}</div>
+      {#if +dpiDlg.dpi > 0}<p class="hint">Prints at {printSize(edit.width, +dpiDlg.dpi)} × {printSize(edit.height, +dpiDlg.dpi)}</p>{/if}
+      <div class="row2">
+        {#if edit.dpi != null}<button onclick={() => applyDpi(true)}>Keep the file's</button>{:else}<button onclick={() => { dpiDlg = null; pinned = ""; }}>Cancel</button>{/if}
+        <button class="primary" onclick={() => applyDpi()}>Apply</button>
+      </div>
+    {:else if effecting}
+      <EffectsPanel start={edit} onstate={(st) => (edit = st)} onerror={say}
+        onclose={() => { effecting = false; pinned = ""; }} />
+    {:else if adjusting}
+      <AdjustPanel start={edit?.adjust} onstate={(st) => (edit = st)} onerror={say}
+        onclose={() => { adjusting = effecting = false; pinned = ""; }} />
+    {:else if crop}
       <h3>Crop</h3>
       <label class="fld">Shape
         <select bind:value={crop.ratio} onchange={applyRatio}>{#each RATIOS as [k, t]}<option value={k}>{t}</option>{/each}</select>
@@ -501,7 +794,8 @@
       {#if (saveDlg.format === "JPEG" || saveDlg.format === "WebP") && !(edit?.lossless && saveDlg.format === "JPEG")}
         <label class="fld">Quality {saveDlg.quality}<input type="range" min="50" max="100" bind:value={saveDlg.quality} /></label>
       {/if}
-      {#if edit?.lossless && saveDlg.format === "JPEG"}<p class="hint good">Only turned or flipped: saved <strong>without any quality loss</strong>.</p>{/if}
+      {#if edit?.lossless && saveDlg.format === "JPEG"}<p class="hint good">Only turned, flipped or given a print size: saved <strong>without any quality loss</strong>.</p>{/if}
+      {#if edit?.dpi}<p class="hint">Print resolution: {edit.dpi} dots per inch.</p>{/if}
       <div class="row2"><button onclick={() => { saveDlg = null; pinned = ""; }}>Cancel</button><button class="primary" disabled={busy} onclick={doSave}>Save</button></div>
     {:else}
       <h3>Picture</h3>
@@ -511,10 +805,16 @@
       <button onclick={() => doEdit({ op: "flip_vertical" })}><Icon name="flip-v" size={16} /> Flip upside down <kbd>V</kbd></button>
       <button onclick={startCrop}><Icon name="crop" size={16} /> Crop… <kbd>X</kbd></button>
       <button onclick={startResize}><Icon name="resize" size={16} /> Resize… <kbd>Ctrl+R</kbd></button>
+      <button onclick={startStraighten}><Icon name="rot-right" size={16} /> Straighten… <kbd>T</kbd></button>
+      <button onclick={startCanvas}><Icon name="crop" size={16} /> Canvas size / border…</button>
+      <button onclick={startDpi}><Icon name="details" size={16} /> Print size (DPI)…</button>
+      <button onclick={startAdjust}><Icon name="details" size={16} /> Colour and light… <kbd>C</kbd></button>
+      <button onclick={startRetouch}><Icon name="details" size={16} /> Red eye, heal, clone, draw… <kbd>E</kbd></button>
+      <button onclick={startEffects}><Icon name="details" size={16} /> Frame and watermark… <kbd>F</kbd></button>
       <h3>Save</h3>
-      <button onclick={startSave} disabled={!edit?.edits}><Icon name="save" size={16} /> Save as… <kbd>Ctrl+S</kbd></button>
+      <button onclick={startSave} disabled={!dirty}><Icon name="save" size={16} /> Save as… <kbd>Ctrl+S</kbd></button>
       <button onclick={stepBack} disabled={!edit?.edits}><Icon name="undo" size={16} /> Undo last change <kbd>Ctrl+Z</kbd></button>
-      <button onclick={dropEdits} disabled={!edit?.edits}><Icon name="close" size={16} /> Throw away changes</button>
+      <button onclick={dropEdits} disabled={!dirty}><Icon name="close" size={16} /> Throw away changes</button>
       <h3>File</h3>
       <button onclick={() => cur && revealItem(cur.id)}><Icon name="explorer" size={16} /> Show in Explorer</button>
       <button onclick={() => (pinned = "right")}><Icon name="details" size={16} /> Information (EXIF) <kbd>I</kbd></button>
@@ -533,9 +833,12 @@
   <!-- BOTTOM: navigation + zoom toolbar, with the navigator -->
   <div class="fly bottom" class:open={open("bottom")} onpointerleave={() => (edge = "")} role="toolbar" tabindex="-1" aria-label="Navigation and zoom">
     {#if navBox}
-      <div class="nav" role="presentation" onpointerdown={navTo} title="Navigator: click to look at that part">
-        <img {src} alt="" draggable="false" />
-        <i style="left:{navBox.x * 100}%; top:{navBox.y * 100}%; width:{navBox.w * 100}%; height:{navBox.h * 100}%"></i>
+      <!-- Overview: its own frame attached to the toolbar's left end, so the bar keeps its height. -->
+      <div class="navframe">
+        <div class="nav" role="presentation" onpointerdown={navTo} title="Overview: click or drag to look at that part">
+          <img {src} alt="" draggable="false" />
+          <i style="left:{navBox.x * 100}%; top:{navBox.y * 100}%; width:{navBox.w * 100}%; height:{navBox.h * 100}%"></i>
+        </div>
       </div>
     {/if}
     <div class="vbar">
@@ -557,7 +860,7 @@
       <button title="Rotate right (R)" onclick={() => doEdit({ op: "rotate_right" })}><Icon name="rot-right" /></button>
       <button title="Crop (X)" onclick={startCrop}><Icon name="crop" /></button>
       <button title="Resize (Ctrl+R)" onclick={startResize}><Icon name="resize" /></button>
-      <button title="Save as (Ctrl+S)" disabled={!edit?.edits} onclick={startSave}><Icon name="save" /></button>
+      <button title="Save as (Ctrl+S)" disabled={!dirty} onclick={startSave}><Icon name="save" /></button>
       <span class="sep"></span>
       <button title="Information (I)" onclick={() => (pinned = pinned === "right" ? "" : "right")}><Icon name="details" /></button>
       <button title="Show in Explorer" onclick={() => cur && revealItem(cur.id)}><Icon name="explorer" /></button>
@@ -572,6 +875,8 @@
   .photo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); transform-origin: center; }
   .photo.fit { max-width: 100%; max-height: 100%; }
   .nopic { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; color: #aaa; gap: 10px; }
+  .vstars { color: #ffc83d; margin-left: 10px; letter-spacing: 1px; }
+  .vtag { color: #8ab4ff; margin-left: 10px; }
   .info { position: absolute; top: 6px; left: 10px; font: 13px var(--mono); color: #7ee08a; text-shadow: 0 1px 2px #000; pointer-events: none; }
   .unsaved { color: #ffc46b; margin-left: 10px; }
   .msg { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); background: rgba(28, 30, 34, 0.95); color: #e8eaee; padding: 8px 14px; border-radius: 8px; max-width: 70%; z-index: 5; font-size: 14px; }
@@ -587,6 +892,7 @@
   .fly button { color: inherit; }
   .fly.left { left: 0; top: 50%; width: 260px; transform: translate(-105%, -50%); padding: 6px 6px 12px; border-radius: 0 10px 10px 0; max-height: 94%; overflow: auto; }
   .fly.left.open { transform: translate(0, -50%); }
+  .fly.left.wide { width: 330px; overflow-x: hidden; }
   .fly.left > button { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; padding: 5px 10px; border-radius: 5px; font-weight: 400; text-align: left; }
   .fly.left > button:hover:not(:disabled) { background: #3a64c8; }
   .fly.left > button:disabled { opacity: 0.4; }
@@ -605,7 +911,7 @@
   .sn { font-size: 12px; color: #c9ced6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .st.on { border-color: #6f9bff; background: #1d2a47; }
   .st img { max-width: 100%; max-height: 120px; object-fit: contain; }
-  .fly.bottom { bottom: 0; left: 0; right: 0; transform: translateY(105%); padding: 10px 14px; display: flex; align-items: center; gap: 14px; min-height: 52px; }
+  .fly.bottom { bottom: 0; left: 0; right: 0; transform: translateY(105%); padding: 10px 14px; display: flex; align-items: center; gap: 14px; height: 62px; box-sizing: border-box; }
   .fly.bottom.open { transform: translateY(0); }
   .vbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; flex: 1; }
   .vbar button { display: grid; place-items: center; min-width: 42px; height: 42px; padding: 0 8px; background: none; border: 1px solid transparent; border-radius: 8px; }
@@ -617,7 +923,9 @@
   .pos { font: 15px var(--mono); padding: 0 8px; min-width: 76px; text-align: center; }
   .t { font: 600 14px var(--mono); }
   .sep { width: 1px; height: 30px; background: #3a3e45; margin: 0 6px; }
-  .nav { position: relative; width: 160px; border: 1px solid #4a4f58; cursor: crosshair; overflow: hidden; }
+  .navframe { position: absolute; left: 0; bottom: 100%; padding: 8px 8px 6px; background: rgba(28, 30, 34, 0.96);
+    border-radius: 0 10px 0 0; box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45); }
+  .nav { position: relative; width: 180px; max-height: 40vh; border: 1px solid #4a4f58; cursor: crosshair; overflow: hidden; }
   .nav img { display: block; width: 100%; }
   .nav i { position: absolute; border: 2px solid #ffc46b; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.45); }
 
@@ -635,6 +943,21 @@
   .hint.good { color: #7ee08a; }
 
   .shade { position: absolute; inset: 0; z-index: 2; cursor: crosshair; }
+  .sframe { position: fixed; z-index: 1; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); outline: 1px solid #ffc46b;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.28) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.28) 1px, transparent 1px);
+    background-size: 12.5% 12.5%; }
+  .sline { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+  .sline line { stroke: #ffc46b; stroke-width: 2; }
+  .fly.left > button.wide-btn { justify-content: center; margin: 6px 0; border: 1px solid #ffffff33; }
+  .fly.left > button.wide-btn.on { background: #3a64c8; color: #fff; }
+  .anchors { display: grid; grid-template-columns: repeat(3, 28px); gap: 4px; margin: 4px 10px 8px; }
+  .anchors button { width: 28px; height: 22px; padding: 0; border-radius: 4px; }
+  .anchors button.on { background: #ffc46b; border-color: #ffc46b; }
+  .swatches { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  .sw { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid #555; }
+  .sw.on { border-color: #ffc46b; }
+  .swatches input[type="color"] { width: 34px; height: 26px; padding: 0; border: none; background: none; }
+  .pcts button.on { background: #3a64c8; color: #fff; }
   .cropbox { position: fixed; z-index: 3; border: 2px solid #ffc46b; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); cursor: move; }
   .cropbox::before, .cropbox::after { content: ""; position: absolute; border: 0 dashed rgba(255, 255, 255, 0.35); pointer-events: none; }
   .cropbox::before { left: 33.3%; right: 33.3%; top: 0; bottom: 0; border-left-width: 1px; border-right-width: 1px; }

@@ -41,7 +41,7 @@ fn value_text(v: &serde_json::Value) -> String {
     }
 }
 
-const WRITABLE: &[&str] = &[
+pub(crate) const WRITABLE: &[&str] = &[
     "jpg", "jpeg", "jpe", "tif", "tiff", "png", "webp", "heic", "heif", "dng", "cr2", "nef", "arw", "orf", "rw2", "pef",
 ];
 
@@ -254,7 +254,7 @@ pub fn write_args(c: &MetaChanges) -> Res<Vec<String>> {
 }
 
 /// Verified copy of `src` to the new file `dst`.
-fn backup(src: &Path, dst: &Path) -> Res<String> {
+pub(crate) fn backup(src: &Path, dst: &Path) -> Res<String> {
     std::fs::create_dir_all(dst.parent().ok_or("no folder")?).map_err(err)?;
     let h = cs_core::hash_file(src).map_err(err)?;
     std::fs::copy(src, dst).map_err(err)?;

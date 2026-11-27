@@ -2,8 +2,9 @@
   import {
     pickFolder, pickSaveFile, confirmBox, findDuplicates, resolveDuplicates, saveDuplicateReport,
     undoDuplicates, openFolder, showDuplicate, onProgress, thumbUrl, previewUrl, formatBytes, plural,
-    baseName, parentDir, joinPath, binStatus,
+    baseName, parentDir, joinPath, binStatus, duplicateItems,
   } from "../lib/api.js";
+  import Compare from "./Compare.svelte";
   import { app, dups, resetDups } from "../lib/state.svelte.js";
 
   let { active } = $props();
@@ -18,6 +19,19 @@
   let sel = $state(0); // selected set, shown in the preview pane
   let typed = $state("");
   let peek = $state(null); // near-duplicates: which copy the big preview shows (null = the one to keep)
+  let comparing = $state(null); // { hash, items } while Compare side by side is open
+
+  // Near-duplicate photos: up to 4 versions side by side at full size; "Keep this one" picks it.
+  const canCompare = (g) => g?.similar && g.files.filter((f) => f.kind === "image").length >= 2;
+  async function openCompare() {
+    try {
+      const all = await duplicateItems(cur.hash);
+      const idx = cur.files.map((f, i) => i).filter((i) => cur.files[i].kind === "image").slice(0, 4);
+      comparing = { hash: cur.hash, idx, items: idx.map((i) => all[i]) };
+    } catch (e) {
+      error = String(e);
+    }
+  }
 
   let cur = $derived(dups.scan?.groups[sel] ?? null);
   $effect(() => {
@@ -89,7 +103,7 @@
 
   // Keyboard on the results: arrows move between sets, 1-9 keep that copy, Space includes/leaves alone.
   function onKey(e) {
-    if (!active || dups.phase !== "results" || !dups.scan?.groups.length) return;
+    if (!active || comparing || dups.phase !== "results" || !dups.scan?.groups.length) return;
     const t = e.target;
     if (t instanceof HTMLInputElement && t.type === "text") return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -97,7 +111,7 @@
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       sel = Math.max(0, Math.min(n - 1, sel + (e.key === "ArrowDown" ? 1 : -1)));
       document.querySelector(`.grow[data-gi="${sel}"]`)?.scrollIntoView({ block: "nearest" });
-    } else if (/^[1-9]$/.test(e.key) && cur && Number(e.key) <= cur.files.length && !skip[cur.hash]) {
+    } else if (/^[1-9]$/.test(e.key) && cur && Number(e.key) <= cur.files.length && (!skip[cur.hash] || cur.similar)) {
       dups.keep[cur.hash] = Number(e.key) - 1;
       peek = null;
     } else if (e.key === " " && cur && (t === document.body || t.classList?.contains("grow"))) {
@@ -283,6 +297,10 @@
                 <strong>Set {sel + 1} of {s.groups.length}</strong>
                 <span class="muted">{cur.similar ? "different files, same picture" : `${formatBytes(cur.size)} each`}</span>
                 <span class="spacer"></span>
+                {#if canCompare(cur)}
+                  <button class="small" onclick={openCompare} title="See the versions next to each other, zoomed in together">
+                    Compare side by side{cur.files.length > 4 ? " (first 4)" : ""}</button>
+                {/if}
                 <label class="check small">
                   <input type="checkbox" checked={!skip[cur.hash]} onchange={(e) => (skip = { ...skip, [cur.hash]: !e.currentTarget.checked })} />
                   include this set
@@ -385,6 +403,11 @@
     </div>
   {/if}
 </section>
+
+{#if comparing}
+  <Compare items={comparing.items} onclose={() => (comparing = null)}
+    onpick={(k) => { dups.keep[comparing.hash] = comparing.idx[k]; peek = null; comparing = null; }} />
+{/if}
 
 <style>
   .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; display: grid; gap: 16px; }

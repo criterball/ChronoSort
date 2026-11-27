@@ -1,6 +1,6 @@
 # STATUS (resume point)
 
-Updated: 2026-11-24
+Updated: 2026-11-25
 
 ## Decided
 - Name: ChronoSort. License: GPL-3.0-or-later.
@@ -142,6 +142,95 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - **Fixed (Places.svelte)**: Undo from the "Earlier in this folder" list restored the files but left the screen stale (all pins, nothing ticked), showed no message, never showed failures, and dropped the run from the list even if files could not be put back. Now it rescans (the run list comes from disk, so a partly failed run stays), shows "✓ Undone …" plus a "Could not be put back" list on both screens; the done-screen Undo button stays while failures remain; a new apply clears an old undo message.
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
+
+## 2026-11-27 (later): nice-to-haves 4 + 5 built (not committed)
+- **4 Frame and watermark** (viewer key F, `EffectsPanel.svelte`): `cs-adjust/src/effects.rs` — frames none/border/matte
+  (line)/instant/rounded/shadow (erf soft shadow)/vignette, sizes in % of the short side; watermark layer (text drawn on a
+  canvas in the panel → PNG, or a logo file via `cs_image::open`) with anchor/width/margin/opacity. Non-destructive,
+  applied LAST (after adjust) in preview and save; `edit_effects`, `edit_watermark`; EditState has out_width/out_height
+  (frame grows the picture) and `has_effects` (kills lossless). Crop/straighten/retouch show `edit://…-raw` (no effects)
+  so marks map onto the picture. "Use my last settings" (localStorage chronosort.effects.v1). 10 cs-adjust tests + app
+  test `frame_and_watermark_are_saved_last`. Click-tested: all 6 styles, text watermark, save copy (1056×1174, dates +
+  rating kept), reuse on next photo, logo PNG with transparency, missing logo → clear error.
+- **5 Slideshow** (browser key S, toolbar button, right-click, `Slideshow.svelte`): settings card (seconds, transition
+  none/fade/slide/zoom/mixed, videos play/still/skip + sound, caption, random, loop, music files + volume; remembered in
+  localStorage chronosort.slideshow.v1), full screen, controls on mouse move (Space, ← →, + −, M, Esc), end card.
+  Backend `slideshow.rs`: `media://<id>` with byte ranges (4 MB pieces; only browse ids, only playable mp4/mov/webm +
+  mp3/m4a/wav/ogg/flac), `slideshow_music` (picked files), `slideshow_playable`, `slideshow_awake` →
+  `cs_platform::keep_awake` (SetThreadExecutionState helper thread). CSP gained `media-src media: http://media.localhost`.
+  Click-tested: images fill the screen, captions, music plays + loops, video plays (music ducks to 20 %), pause stops
+  both, end card, Esc. Global `.bar` class in app.css clashed (renamed `.ctl`).
+- The user heard the test tune (temp/cs_music/tune.wav): test with music OFF / volume 0 from now on.
+- check.sh passes (incl. new tests); release → dist/ChronoSort.exe (48.2 MB) + chronosort-cli.exe, 13:23. NOT committed.
+- Next: ask the user about committing (1–7 all uncommitted) and the next nice-to-have (8–15).
+
+## 2026-11-27: nice-to-have 7 click-tested (not committed)
+- Debug app on temp/cs_rate (NASA copies + h264.mp4): keys 3/5/2/4 on several, ExifTool Rating + RatingPercent read back,
+  **Windows Shell System.Rating = 50** for 3 stars, Ctrl+Z → byte-identical to the original, modified time kept,
+  filters (4+, No stars yet, Tagged), sort by Stars, Details column, right-click star row (4 stars), tag badge,
+  tag survives an app restart (filter resets: session-only by design), viewer Ctrl+3 + Q, light theme. All OK.
+- Fixes: (1) rating a mixed selection now says "N files were left out (stars are for photos only)" instead of skipping
+  videos silently. (2) App.svelte's window key handler ignores keys while `.viewer` is open, so Ctrl+1–4 / F1 can
+  never switch screens behind the full-screen viewer (that left the window stuck full-screen on People).
+- cargo fmt applied to last session's new code (fileops/main/rating/cs-meta lib).
+- **check.sh passes** (2026-11-27). Release build → dist/ChronoSort.exe (48.0 MB) + chronosort-cli.exe (CLI package is `chronosort`), 11:49.
+- Next: ask the user about committing + which nice-to-have (4, 5, 8–15).
+- Note: Undo after rating clears the selection (same as other undos).
+- Dev note: navigate with forward slashes in nav.js (backslashes got mangled through bash); start Vite BEFORE the app.
+
+## PAUSED 2026-11-25 evening (user: "save progress and stop for today"). NOTHING committed since dfbfba2.
+Uncommitted: nice-to-haves 1-3 (colour/geometry/retouch, see 2026-11-24 evening) + today's 6 and 7 below.
+dist/ChronoSort.exe was rebuilt at 20:07 with 1-3 (NOT with 6/7). Debug app and Vite are closed.
+
+### Done today: nice-to-have 6, Compare side by side (click-tested in the debug app)
+- `Compare.svelte`: 2–4 pictures in a grid (4 = 2×2). Zoom and move are synced by default: each view has z relative to fit
+  plus a normalised centre, so a smaller copy shows the same spot. Wheel zooms at the pointer, drag pans,
+  double-click toggles 100 % / fit. Keys: 0/B fit, 1/A real pixels of the highlighted pane, + −, S toggles sync, Tab, Esc.
+  It loads the original (`fthumb _o`) once the preview's pixels run out. Captions show W×H · size · date, the folder,
+  "most pixels" / "biggest file" (only when one picture is the unique best), and Show in Explorer.
+- Browser: key P, right-click "Compare N side by side", and a button in the preview pane when 2–4 media files are selected.
+- Find duplicates: "Compare side by side" for near-duplicate sets (first 4 image versions) with "Keep this one" →
+  sets dups.keep, but does NOT tick "include this set". Backend `duplicate_items(hash)` (main.rs) hands out browse ids.
+  Small fix: keys 1–9 now also pick the keeper in near-duplicate sets that are left alone (as the radio already did).
+- Tested: 4-up fit, synced wheel zoom, drag, unsynced zoom, Fit, Esc, 100 % on a 3840 px file (original loaded),
+  Keep this one both ways, no console warnings. Test files temp/cs_compare (NASA + an ffmpeg upscale), shots temp/cs_shots/cmp_*.png.
+- Help text + shortcut list updated; icon "compare".
+
+### In progress: nice-to-have 7, star ratings + tag + filters (code complete, NOT click-tested yet)
+- User decision 2026-11-25: **stars go INTO the photo file** (XMP xmp:Rating + EXIF Rating/RatingPercent; Windows'
+  XMP-microsoft:RatingPercent is removed). The **tag** mark goes in ChronoSort's own list (`<data>/tagged.json`, paths; files untouched).
+- `crates/cs-meta/src/rating.rs`: a fast reader (JPEG header segments only, a 512 KB scan for other formats, a RAW .xmp sidecar,
+  then EXIF 0x4746). Tests pass (3).
+- `src-tauri/src/rating.rs`: commands `marks(ids)`, `set_rating(ids, stars)` (one ExifTool process, verified backup per file into
+  .chronosort/info-backups/<run>/, -P keeps dates (to the µs), files that already have the stars are skipped, "fileop-progress"
+  events), `set_tagged(ids, on)`. Undo: new `Undo::MetaEditedMany` + `restore_meta()` helper in fileops.rs. Tests pass (2, real ExifTool round trip + undo = exact bytes).
+  cs-meta was added as an app dependency; meta::backup / WRITABLE and browse::real_format are now pub(crate).
+- Browser: marks load per folder in parts of 300. Keys 0–5 rate, Q tags. Right-click has a star row
+  (ContextMenu `{stars}` item, skipped by arrow keys) plus Tag / Remove the tag. The filter list "Any stars / ★ or more … /
+  No stars yet / Tagged" is session-only. Sort by "Stars"; a Stars column in Details; stars overlay on thumbnails, a tag badge top right;
+  tiles/list show them too. After rating, quietRefresh() keeps the selection and scroll. A files-only progress bar shows for batches > 3.
+- Viewer: stars/tag in the info line, Ctrl+0–5 rates (plain 0/1 stay zoom), Q tags; refused while edits are unsaved.
+- Help + shortcut list updated; icon "tag". svelte-check 0/0; debug build OK.
+
+### Next (resume here)
+1. Click-test 7 in the debug app (start: `tools
+ode
+px.cmd vite --force` in apps/chronosort-app, then
+   target\debug\chronosort.exe with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333; navigate with
+   temp/cs_scripts/nav.js). Use temp/cs_compare copies ONLY. Check: keys 1–5/0 on several, ExifTool reads Rating back, Windows
+   Explorer shows the stars, Ctrl+Z restores, filter + sort, tag persists after restart, viewer Ctrl+3 / Q, light theme.
+2. Full scripts/check.sh, release build → dist.
+3. Ask the user about committing (no-commit rule) and the next nice-to-have (4, 5, 8–15 in docs/ui-reference/FASTSTONE_STUDY.md §7).
+   Note: tags are keyed by path, so moving a file outside ChronoSort loses its tag (could follow ChronoSort's own moves/renames later).
+
+## 2026-11-24 (evening): nice-to-haves 1-3 in the viewer + toolbar (not committed)
+- **1 Colour tools** — new crate `cs-adjust` (Adjust settings + `render`, `auto`, `controls`), built on craft-develop pieces: `ToneMap::display` (contrast/whites/blacks), `ParametricCurve` (region curve), `MonotoneCurve`/`Lut1` (levels, point curve), `sharpen_term`/`sharpen_limit`, `gamut_map`, OkLab/OkLCh (vibrance, saturation, colour NR); slider ranges from craft `CONTROLS`. Own: relative WB + exposure (linear), edge-aware highlights/shadows/clarity/texture (guided filter in log luminance, `filter.rs`), dehaze (dark channel), colour balance, NR, blur, looks (B&W, sepia, negative), Auto (percentile levels + WB from the densest low-chroma OkLab cluster, so blue suits do not fool it). 8- and 16-bit kept, alpha kept, LUT-based IO: 20–110 ms per stage at 2 MP. Contact sheet example `examples/sheet.rs`, timings `examples/stages.rs`.
+  - App: `edit_adjust` / `edit_auto` / `edit_controls`; preview renders adjustments on a cached 1600 px base; Save applies them at full size (lossless JPEG only when unadjusted). UI `AdjustPanel.svelte` (key C): sections, Auto, Reset, hold Before, double-click resets, debounced single-flight updates.
+- **2 Geometry** — `cs-image/src/geometry.rs`: `Edit::Straighten { angle100 }` (bicubic, crop to the largest same-shape rectangle, positive = clockwise, test), `Edit::Canvas { w, h, anchor, color }`. DPI: `edit_set_dpi`; written via the encoder's `meta.dpi` plus ExifTool EXIF (+JFIF for JPEG); DPI-only JPEG saves are lossless (test). UI: Straighten (key T) with CSS live preview, grid frame, and "draw a level line" (horizontal or vertical); Canvas size with border presets, 3×3 anchor, colour; Print size with cm/in.
+- **3 Retouch** — `cs-adjust/src/retouch.rs`: `red_eye` (craft RedEye model: pupil size, darken), `heal` (craft `inpaint::complete` PatchMatch, membrane fallback, per-group crops), `clone_stamp` (aligned offset, hardness), `overlay` (PNG layer). Edit history is now `Vec<Step>` (Edit | Pixels(Arc<Image>)) so retouching undoes. UI: `RetouchOverlay.svelte` + `RetouchPanel.svelte` (key E): red eye boxes, heal strokes (applied on release), clone with Alt+click source, draw pen/line/arrow/box/oval/text on a full-res canvas.
+- Click-tested in the debug app: Auto + sliders, B&W save (SATMAX 0, original byte-identical); straighten 4° + 5 % black border + 300 DPI → 955×1417, EXIF and JFIF 300; heal removed the red mic logo seamlessly, Ctrl+Z brought it back; arrow + text drawn into the picture. (Test-script note: cdp screenshots are device pixels; pass coordinates relative to the element.)
+- **Viewer toolbar (user request):** the bottom bar keeps 62 px when zoomed; the overview (navigator) is its own frame attached to the bar's left end (above it), click or drag to move the view. User confirmed "great it works".
+- check.sh passes, 165 tests.
 
 ## 2026-11-24 (later): item 5 video thumbnails without FFmpeg, 3c, item 4 / 6 closed (not committed)
 - **`crates/cs-video`** (new): `poster(path, max_side)` / `poster_bytes` for MP4/MOV with craft-media (isobmff) + craft-video (h264/hevc/vp9/av1 decode), same pinned craft-libs rev as cs-image. Key frame at or before ~1 s (a tenth of short clips), flush after it; display matrix → upright (iPhone Rotation 90 checked); colour by H.273 matrix tag (untagged: 709 for ≥720 lines, else 601), 10-bit = value / 4. Caps: 80 MP, 64 MiB packet, 60 packets.

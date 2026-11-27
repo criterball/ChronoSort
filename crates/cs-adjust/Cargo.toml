@@ -1,0 +1,22 @@
+[package]
+name = "cs-adjust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Colour and light adjustments for ChronoSort's viewer, built on photocraft's develop pipeline pieces (craft-develop, MIT OR Apache-2.0)."
+
+[dependencies]
+# photocraft / craft-libs, pinned to the same reviewed commit as cs-image (docs/THIRD_PARTY_POLICY.md).
+craft-develop = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540" }
+craft-develop-model = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540" }
+craft-color-transform = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540" }
+cs-image = { version = "0.1.0", path = "../cs-image" }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+rayon = "1.12.0"
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }

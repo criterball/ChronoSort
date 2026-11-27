@@ -3,13 +3,14 @@
   import Icon from "./Icon.svelte";
 
   // items: [{ label, icon?, key?, action, danger?, disabled?, bold? } | "-"]
+  //   or a star row: { stars: current (0–5, -1 = mixed), label, action(n) }
   let { items, x, y, onclose } = $props();
 
   let el = $state();
   // svelte-ignore state_referenced_locally
   let pos = $state({ left: x, top: y }); // first guess; adjusted on mount
   let active = $state(-1);
-  const real = $derived(items.map((it, i) => ({ it, i })).filter(({ it }) => it !== "-" && !it.disabled));
+  const real = $derived(items.map((it, i) => ({ it, i })).filter(({ it }) => it !== "-" && !it.disabled && it.stars == null));
 
   onMount(async () => {
     await tick();
@@ -45,6 +46,14 @@
   {#each items as it, i}
     {#if it === "-"}
       <div class="sep" role="separator"></div>
+    {:else if it.stars != null}
+      <div class="starrow" role="group" aria-label={it.label}>
+        <span class="lbl">{it.label}</span>
+        {#each [1, 2, 3, 4, 5] as n}
+          <button class="st" class:on={it.stars >= n} title="{n} {n === 1 ? 'star' : 'stars'} (key {n})" onclick={() => { onclose(); it.action(n); }}>★</button>
+        {/each}
+        <button class="st none" title="No stars (key 0)" disabled={it.stars === 0} onclick={() => { onclose(); it.action(0); }}>✕</button>
+      </div>
     {:else}
       <button role="menuitem" class="item" class:danger={it.danger} class:bold={it.bold} class:active={active === i} disabled={it.disabled}
         onmouseenter={() => (active = i)} onclick={() => run(it)}>
@@ -75,5 +84,12 @@
   .ic { display: grid; place-items: center; color: var(--muted); }
   .item.active .ic { color: inherit; }
   .key { color: var(--muted); font-size: 12px; padding-left: 18px; }
+  .starrow { display: flex; align-items: center; gap: 1px; padding: 3px 6px 3px 36px; }
+  .starrow .lbl { flex: 1; color: var(--muted); font-size: 12.5px; margin-right: 8px; }
+  .st { width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
+  .st.on { color: #e0a800; }
+  .st:hover:not(:disabled) { background: var(--accent-soft); color: #e0a800; }
+  .st.none { font-size: 12px; margin-left: 4px; }
+  .st:disabled { opacity: 0.35; }
   .sep { height: 1px; background: var(--border); margin: 4px 6px; }
 </style>

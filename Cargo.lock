@@ -503,7 +503,9 @@ dependencies = [
 name = "chronosort-app"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "blake3",
+ "cs-adjust",
  "cs-ai",
  "cs-core",
  "cs-db",
@@ -511,6 +513,7 @@ dependencies = [
  "cs-faces",
  "cs-geo",
  "cs-image",
+ "cs-meta",
  "cs-model",
  "cs-plan",
  "cs-platform",
@@ -679,11 +682,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-cms"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "md-5",
+ "rayon",
+]
+
+[[package]]
+name = "craft-color"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "craft-color-transform"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "craft-cms",
+ "craft-color",
+ "serde",
+]
+
+[[package]]
 name = "craft-dds"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
 dependencies = [
  "rayon",
+]
+
+[[package]]
+name = "craft-develop"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "craft-color-transform",
+ "craft-develop-model",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "craft-develop-model"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "craft-geom",
+ "craft-metadata",
+ "miniz_oxide 0.9.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "craft-geom"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=77c7c62345c1f4213f59a07d9fdc156ecde0b540#77c7c62345c1f4213f59a07d9fdc156ecde0b540"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -838,6 +899,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cs-adjust"
+version = "0.1.0"
+dependencies = [
+ "craft-color-transform",
+ "craft-develop",
+ "craft-develop-model",
+ "cs-image",
+ "image",
+ "rayon",
+ "serde",
+]
+
+[[package]]
 name = "cs-ai"
 version = "0.1.0"
 dependencies = [
@@ -932,6 +1006,7 @@ version = "0.1.0"
 dependencies = [
  "craft-image-codecs",
  "image",
+ "rayon",
  "serde",
  "tempfile",
 ]
@@ -947,6 +1022,7 @@ dependencies = [
  "quick-xml 0.42.0",
  "regex",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -2758,6 +2834,16 @@ checksum = "3f607c237553f086e7043417a51df26b2eb899d3caff94e6a67592ff992fedc7"
 dependencies = [
  "autocfg",
  "rawpointer",
+]
+
+[[package]]
+name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
 ]
 
 [[package]]

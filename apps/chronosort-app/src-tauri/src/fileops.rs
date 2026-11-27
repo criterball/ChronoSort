@@ -66,6 +66,8 @@ pub enum Undo {
         backup: PathBuf,
         after: String,
     },
+    /// The same for many files at once (e.g. star ratings): (file, backup, after).
+    MetaEditedMany(Vec<(PathBuf, PathBuf, String)>),
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -522,24 +524,46 @@ fn undo_op(op: Undo) -> Result<String, String> {
             Ok("The original picture is back.".into())
         }
         Undo::MetaEdited { file, backup, after } => {
-            let now = cs_core::hash_file(&file).map_err(err)?;
-            if now != after {
-                return Err("The file was changed again since, so it was left as it is.".into());
-            }
-            let tmp = free_name(
-                file.parent().unwrap_or(Path::new(".")),
-                &format!(".{}.chronosort-undo", file.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()),
-            );
-            fs::copy(&backup, &tmp).map_err(err)?;
-            if cs_core::hash_file(&tmp).map_err(err)? != cs_core::hash_file(&backup).map_err(err)? {
-                let _ = fs::remove_file(&tmp);
-                return Err("The backup could not be copied back correctly.".into());
-            }
-            fs::remove_file(&file).map_err(err)?;
-            fs::rename(&tmp, &file).map_err(err)?;
+            restore_meta(&file, &backup, &after)?;
             Ok("The old information is back.".into())
         }
+        Undo::MetaEditedMany(list) => {
+            let mut back = 0;
+            let mut problems = Vec::new();
+            for (file, backup, after) in &list {
+                match restore_meta(file, backup, after) {
+                    Ok(()) => back += 1,
+                    Err(e) => problems
+                        .push(format!("{}: {e}", file.file_name().map(|n| n.to_string_lossy()).unwrap_or_default())),
+                }
+            }
+            if problems.is_empty() {
+                Ok(format!("The old information is back in {back} {}.", if back == 1 { "file" } else { "files" }))
+            } else {
+                Err(format!("{back} put back; not put back: {}", problems.join("; ")))
+            }
+        }
     }
+}
+
+/// Put a file back from its verified backup, only if nobody changed it since `after`.
+fn restore_meta(file: &Path, backup: &Path, after: &str) -> Result<(), String> {
+    let now = cs_core::hash_file(file).map_err(err)?;
+    if now != after {
+        return Err("The file was changed again since, so it was left as it is.".into());
+    }
+    let tmp = free_name(
+        file.parent().unwrap_or(Path::new(".")),
+        &format!(".{}.chronosort-undo", file.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()),
+    );
+    fs::copy(backup, &tmp).map_err(err)?;
+    if cs_core::hash_file(&tmp).map_err(err)? != cs_core::hash_file(backup).map_err(err)? {
+        let _ = fs::remove_file(&tmp);
+        return Err("The backup could not be copied back correctly.".into());
+    }
+    fs::remove_file(file).map_err(err)?;
+    fs::rename(&tmp, file).map_err(err)?;
+    Ok(())
 }
 
 fn empty_progress() -> Progress {

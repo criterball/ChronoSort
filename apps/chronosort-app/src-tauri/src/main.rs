@@ -22,7 +22,9 @@ mod meta;
 mod people;
 mod places;
 mod portable;
+mod rating;
 mod review;
+mod slideshow;
 mod vision;
 
 #[derive(Default)]
@@ -819,6 +821,35 @@ fn show_duplicate(state: State<'_, AppState>, hash: String, index: usize) -> Res
     cs_platform::show_file_in_file_manager(&f.abs).map_err(err)
 }
 
+/// One version of a duplicate set, for Compare side by side (`fthumb://` ids).
+#[derive(Serialize)]
+struct CompareItem {
+    id: u64,
+    name: String,
+    folder: String,
+    size: u64,
+    modified: i64,
+}
+
+/// Viewer ids for the versions of one duplicate set (current scan only), so
+/// Compare can show them at full size. Ids, never paths, go to `fthumb://`.
+#[tauri::command]
+fn duplicate_items(state: State<'_, AppState>, hash: String) -> Res<Vec<CompareItem>> {
+    let s = state.session.lock().map_err(err)?;
+    let scan = s.dups.as_ref().ok_or("find duplicates first")?;
+    let g = scan.groups.iter().find(|g| g.hash == hash).ok_or("unknown group")?;
+    Ok(g.files
+        .iter()
+        .map(|f| CompareItem {
+            id: state.browse.id_for(&f.abs),
+            name: f.abs.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            folder: f.abs.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+            size: f.size,
+            modified: f.mtime.unwrap_or(0),
+        })
+        .collect())
+}
+
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
@@ -959,14 +990,22 @@ fn main() {
             std::thread::spawn(move || responder.respond(thumb_response(&app, &path, cs_thumb::PREVIEW_SIZE)));
         })
         // The picture being edited in the viewer (the number only defeats caching).
-        .register_asynchronous_uri_scheme_protocol("edit", |_ctx, _req, responder| {
-            std::thread::spawn(move || responder.respond(edit::edit_response()));
+        .register_asynchronous_uri_scheme_protocol("edit", |_ctx, req, responder| {
+            let raw = req.uri().path().ends_with("-raw");
+            std::thread::spawn(move || responder.respond(edit::edit_response(raw)));
         })
         // File browser thumbnails: only files handed out by recent listings (ids, never paths).
         .register_asynchronous_uri_scheme_protocol("fthumb", |ctx, req, responder| {
             let app = ctx.app_handle().clone();
             let path = req.uri().path().to_string();
             std::thread::spawn(move || responder.respond(browse::fthumb_response(&app, &path)));
+        })
+        // Videos and music for the slideshow, in byte ranges (only ids the app handed out).
+        .register_asynchronous_uri_scheme_protocol("media", |ctx, req, responder| {
+            let app = ctx.app_handle().clone();
+            let path = req.uri().path().to_string();
+            let range = req.headers().get("range").and_then(|v| v.to_str().ok()).map(str::to_string);
+            std::thread::spawn(move || responder.respond(slideshow::media_response(&app, &path, range.as_deref())));
         })
         // Face crops of the current face search, and stored pictures of named people.
         .register_asynchronous_uri_scheme_protocol("face", |ctx, req, responder| {
@@ -993,6 +1032,10 @@ fn main() {
             undo_duplicates,
             open_folder,
             show_duplicate,
+            duplicate_items,
+            rating::marks,
+            rating::set_rating,
+            rating::set_tagged,
             ai_overview,
             link_model_file,
             unlink_model,
@@ -1018,6 +1061,16 @@ fn main() {
             edit::edit_apply,
             edit::edit_step_back,
             edit::edit_close,
+            edit::edit_adjust,
+            edit::edit_auto,
+            edit::edit_controls,
+            edit::edit_set_dpi,
+            edit::edit_effects,
+            slideshow::slideshow_music,
+            slideshow::slideshow_awake,
+            slideshow::slideshow_playable,
+            edit::edit_watermark,
+            edit::edit_retouch,
             edit::edit_save,
             edit::edit_formats,
             meta::meta_read,

@@ -12,6 +12,8 @@
 //! EXIF orientation tag instead of re-encoding; [`orientation_after`] gives the
 //! tag value for that (the app writes it with ExifTool).
 
+pub mod geometry;
+
 use craft_image_codecs as cc;
 pub use craft_image_codecs::{ChannelLayout, Format, Image, SampleType};
 use std::path::Path;
@@ -38,6 +40,19 @@ pub enum Edit {
     Resize {
         w: u32,
         h: u32,
+    },
+    /// Turn by an angle in hundredths of a degree (positive = clockwise),
+    /// cropped to the largest rectangle of the picture's shape.
+    Straighten {
+        angle100: i32,
+    },
+    /// New canvas size; `anchor` 0..=8 (row by row from top left, 4 = centre),
+    /// added space filled with `color`.
+    Canvas {
+        w: u32,
+        h: u32,
+        anchor: u8,
+        color: [u8; 3],
     },
 }
 
@@ -116,6 +131,8 @@ pub fn apply(img: Image, e: Edit) -> Result<Image, String> {
     match e {
         Edit::Crop { x, y, w, h } => crop(&img, x, y, w, h),
         Edit::Resize { w, h } => resize(&img, w, h),
+        Edit::Straighten { angle100 } => geometry::straighten(&img, f64::from(angle100) / 100.0),
+        Edit::Canvas { w, h, anchor, color } => geometry::canvas(&img, w, h, anchor, color),
         _ => unreachable!(),
     }
 }

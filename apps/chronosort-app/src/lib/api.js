@@ -3,6 +3,10 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save, ask } from "@tauri-apps/plugin-dialog";
 
+export const pickPicture = (title) =>
+  open({ directory: false, multiple: false, title, filters: [{ name: "Pictures", extensions: ["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "gif"] }] });
+export const pickMusic = (title) =>
+  open({ directory: false, multiple: true, title, filters: [{ name: "Music", extensions: ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac"] }] });
 export const pickFolder = (title) => open({ directory: true, multiple: false, title });
 export const pickModelFile = (title, ext) =>
   open({ directory: false, multiple: false, title, filters: [{ name: ext.toUpperCase() + " model", extensions: [ext] }] });
@@ -23,6 +27,7 @@ export const saveDuplicateReport = (path) => invoke("save_duplicate_report", { p
 export const undoDuplicates = (target) => invoke("undo_duplicates", { target });
 export const openFolder = (path) => invoke("open_folder", { path });
 export const showDuplicate = (hash, index) => invoke("show_duplicate", { hash, index });
+export const duplicateItems = (hash) => invoke("duplicate_items", { hash });
 export const exitApp = () => invoke("exit_app");
 export const aiOverview = () => invoke("ai_overview");
 export const linkModelFile = (pack, role, path) => invoke("link_model_file", { pack, role, path });
@@ -109,9 +114,27 @@ export const editOpen = (id) => invoke("edit_open", { id });
 export const editApply = (edit) => invoke("edit_apply", { edit });
 export const editStepBack = () => invoke("edit_step_back");
 export const editClose = () => invoke("edit_close");
+export const editAdjust = (adjust) => invoke("edit_adjust", { adjust });
+export const editAuto = () => invoke("edit_auto");
+export const editControls = () => invoke("edit_controls");
+export const editSetDpi = (dpi) => invoke("edit_set_dpi", { dpi });
+export const editRetouch = (op) => invoke("edit_retouch", { op });
+export const editEffects = (effects) => invoke("edit_effects", { effects });
+export const editWatermark = (png, path) => invoke("edit_watermark", { png, path });
 /** mode "copy" | "replace"; format "JPEG" | "PNG" | "TIFF" | "WebP". */
 export const editSave = (mode, format, quality, name = null) => invoke("edit_save", { mode, format, quality, name });
 export const editFormats = () => invoke("edit_formats");
+// Slideshow: videos and music stream from media://<id> (only ids the app handed out).
+export const mediaUrl = (id) => convertFileSrc(String(id), "media");
+export const slideshowMusic = (paths) => invoke("slideshow_music", { paths });
+export const slideshowAwake = (on) => invoke("slideshow_awake", { on });
+export const slideshowPlayable = (ids) => invoke("slideshow_playable", { ids });
 export const editUrl = (version) => convertFileSrc(String(version), "edit");
 export const metaRead = (id) => invoke("meta_read", { id });
 export const metaWrite = (id, changes) => invoke("meta_write", { id, changes });
+
+// Star ratings (written into the photo, with backup + Undo) and the tag mark (ChronoSort's own list).
+export const readMarks = (ids) => invoke("marks", { ids });
+export const setRating = (ids, stars) => invoke("set_rating", { ids, stars });
+export const setTagged = (ids, on) => invoke("set_tagged", { ids, on });
+export const starText = (n) => "★".repeat(n) + "☆".repeat(5 - n);

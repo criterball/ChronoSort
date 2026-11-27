@@ -9,6 +9,7 @@ description = "Open, edit and save photos for ChronoSort's viewer, using photocr
 # photocraft / craft-libs image code, pinned to one reviewed commit (docs/THIRD_PARTY_POLICY.md).
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "77c7c62345c1f4213f59a07d9fdc156ecde0b540", features = ["heif"] }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+rayon = "1.12.0"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

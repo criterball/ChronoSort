@@ -52,9 +52,10 @@ export function crumbs(p, sep) {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 /** Natural order: IMG_2 before IMG_10. Folders always first. */
-export function sortEntries(list, by, desc) {
+export function sortEntries(list, by, desc, rating = () => 0) {
   const dir = desc ? -1 : 1;
   const key = {
+    rating: (a, b) => rating(a) - rating(b) || collator.compare(a.name, b.name),
     name: (a, b) => collator.compare(a.name, b.name),
     date: (a, b) => a.modified - b.modified || collator.compare(a.name, b.name),
     size: (a, b) => a.size - b.size || collator.compare(a.name, b.name),

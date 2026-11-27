@@ -12,6 +12,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
+mod awake;
 mod child;
 mod gpu;
 mod memory;
@@ -20,6 +21,7 @@ mod rename;
 mod space;
 mod volumes;
 
+pub use awake::{is_awake, keep_awake};
 pub use child::{ChildGuard, end_with_us, prepare_child};
 pub use gpu::{Gpu, gpus};
 pub use memory::total_ram;

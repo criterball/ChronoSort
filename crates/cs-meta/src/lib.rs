@@ -14,6 +14,7 @@ mod exif;
 pub mod names;
 pub mod preview;
 mod qt;
+pub mod rating;
 mod sidecar;
 
 pub use names::{FolderDate, FolderKind, NameDate, NameKind};

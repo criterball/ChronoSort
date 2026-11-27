@@ -78,6 +78,8 @@
   function onKey(e) {
     const ctrl = e.ctrlKey || e.metaKey;
     const k = e.key;
+    // The full-screen viewer and the slideshow own the keyboard (Ctrl+0–5 rate there): never switch screens behind it.
+    if (document.querySelector(".viewer, .slideshow")) return;
     let handled = true;
     if (k === "F1") go("help");
     else if (k === "Escape" && !document.querySelector("dialog[open], .viewer, .menu, .jobwrap")) {

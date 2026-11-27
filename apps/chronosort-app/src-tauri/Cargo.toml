@@ -11,12 +11,15 @@ path = "src/main.rs"
 
 [dependencies]
 blake3 = "1.8.7"
+base64 = "0.23"
+cs-adjust = { version = "0.1.0", path = "../../../crates/cs-adjust" }
 cs-ai = { version = "0.1.0", path = "../../../crates/cs-ai" }
 cs-core = { version = "0.1.0", path = "../../../crates/cs-core" }
 cs-db = { version = "0.1.0", path = "../../../crates/cs-db" }
 cs-faces = { version = "0.1.0", path = "../../../crates/cs-faces" }
 cs-vision = { version = "0.1.0", path = "../../../crates/cs-vision" }
 cs-image = { version = "0.1.0", path = "../../../crates/cs-image" }
+cs-meta = { version = "0.1.0", path = "../../../crates/cs-meta" }
 cs-geo = { version = "0.1.0", path = "../../../crates/cs-geo" }
 cs-exec = { version = "0.1.0", path = "../../../crates/cs-exec" }
 cs-model = { version = "0.1.0", path = "../../../crates/cs-model" }

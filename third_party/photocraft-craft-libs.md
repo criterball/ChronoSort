@@ -15,6 +15,7 @@ Both are compatible with ChronoSort's GPL-3.0-or-later. The Apache NOTICE goes i
 - `craft-heif`: a pure-Rust HEIC decoder (wraps heic-rs).
 - `craft-media` (feature `isobmff` only): the MP4 / MOV demuxer, for video posters.
 - `craft-video` (features `h264-decode`, `hevc-decode`, `vp9-decode`, `av1-decode`): one poster frame per video (`cs-video`).
+- `craft-develop` + `craft-develop-model` + `craft-color-transform` (`cs-adjust`): display tone map, parametric tone curve, monotone curves / LUTs, sharpening terms, gamut mapping, OkLab, the content-aware fill (`inpaint`, PatchMatch) and the slider specs (`CONTROLS`). Both develop crates: `#![forbid(unsafe_code)]`, no panics on hostile input, no file I/O.
 - Not used: `craft-raw`. RAW previews stay with cs-meta's embedded-preview reader; demosaicing would need `craft-develop`.
 
 ## Findings
