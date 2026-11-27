@@ -5,6 +5,8 @@
   import ContextMenu from "./ContextMenu.svelte";
   import Viewer from "./Viewer.svelte";
   import Slideshow from "./Slideshow.svelte";
+  import BatchDialog from "./BatchDialog.svelte";
+  import CreateDialog from "./CreateDialog.svelte";
   import Compare from "./Compare.svelte";
   import {
     browseRoots, listDir, folderSamples, revealItem, fthumbUrl, formatBytes, plural, confirmBox, openFolder, pickFolder,
@@ -26,6 +28,8 @@
   let viewer = $state(null); // { ids: [...], index }
   let compare = $state(null); // 2–4 entries shown side by side
   let slideshow = $state(null); // { items, start }
+  let batch = $state(null); // { items, tab }
+  let create = $state(null); // { items, tab }
   let marks = $state({}); // file id -> { rating (0–5, null = not a photo), tagged }
   let rateFilter = $state("any"); // any | "1".."5" (at least) | none | tagged  (this session only)
   let failedThumbs = $state(new Set());
@@ -227,7 +231,7 @@
   const pathOf = (e) => joinIn(browser.path, e.name, sep);
   // The tree root that unfolds towards the current folder: the deepest one containing it.
   let followRoot = $derived(
-    [...roots.known.map((k) => k.path), ...roots.volumes.map((v) => v.path)]
+    [...(bprefs.root ? [bprefs.root] : []), ...bprefs.favs.map((f) => f.path), ...roots.known.map((k) => k.path), ...roots.volumes.map((v) => v.path)]
       .filter((p) => isInside(browser.path, p, sep))
       .sort((a, b) => b.length - a.length)[0] ?? "",
   );
@@ -291,6 +295,67 @@
     slideshow = { items: list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, modified: x.modified })), start: Math.max(0, from) };
   }
 
+  // Batch tools: the selected files, or every file in this folder when none is selected.
+  function startBatch(tab) {
+    if (!browser.path) return;
+    const sel = selEntries.filter((x) => !x.dir);
+    const list = sel.length ? sel : entries.filter((x) => !x.dir);
+    if (!list.length) return say("There are no files here for the batch tools.");
+    batch = { items: list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, dir: false })), tab };
+  }
+
+  // Create (contact sheet, joined picture, PDF, ZIP): the selected files, or the whole folder.
+  function startCreate(tab) {
+    if (!browser.path) return;
+    const sel = selEntries.filter((x) => !x.dir);
+    const list = sel.length ? sel : entries.filter((x) => !x.dir);
+    if (!list.length) return say("There are no files here.");
+    create = { items: list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, modified: x.modified, dir: false })), tab };
+  }
+
+  // ---------- favourite folders and "show only this folder" ----------
+  const isFav = (p) => bprefs.favs.some((f) => samePath(f.path, p, sep));
+  function toggleFav(p) {
+    if (!p) return;
+    if (isFav(p)) {
+      bprefs.favs = bprefs.favs.filter((f) => !samePath(f.path, p, sep));
+      say(`“${nameOf(p) || p}” is no longer a favourite.`);
+    } else {
+      if (bprefs.favs.length >= 40) return say("You have 40 favourites already; remove one first.");
+      bprefs.favs = [...bprefs.favs, { path: p, label: nameOf(p) || p }];
+      say(`“${nameOf(p) || p}” added to your favourites (at the top of the folder list).`);
+    }
+    saveBrowserPrefs();
+  }
+  function moveFav(p, d) {
+    const i = bprefs.favs.findIndex((f) => samePath(f.path, p, sep));
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= bprefs.favs.length) return;
+    const a = [...bprefs.favs];
+    [a[i], a[j]] = [a[j], a[i]];
+    bprefs.favs = a;
+    saveBrowserPrefs();
+  }
+  function setRoot(p) {
+    bprefs.root = p || "";
+    saveBrowserPrefs();
+    if (p && !isInside(browser.path, p, sep)) navigate(p);
+  }
+  const favItems = (p) => {
+    if (!p) return [];
+    const fav = isFav(p);
+    const i = bprefs.favs.findIndex((f) => samePath(f.path, p, sep));
+    return [
+      { label: fav ? "Remove from favourites" : "Add to favourites", icon: fav ? "star-off" : "star", key: samePath(p, browser.path, sep) ? "Ctrl+D" : undefined, action: () => toggleFav(p) },
+      ...(fav && bprefs.favs.length > 1
+        ? [{ label: "Move up in favourites", disabled: i === 0, action: () => moveFav(p, -1) }, { label: "Move down in favourites", disabled: i === bprefs.favs.length - 1, action: () => moveFav(p, 1) }]
+        : []),
+      samePath(bprefs.root, p, sep)
+        ? { label: "Show all folders in the tree", icon: "pc", action: () => setRoot("") }
+        : { label: "Show only this folder in the tree", icon: "tree-left", action: () => setRoot(p) },
+    ];
+  };
+
   function columns() {
     if (bprefs.view === "details" || bprefs.view === "list") return 1;
     const first = area?.querySelector(".cell");
@@ -316,7 +381,7 @@
   }
 
   function onAreaKey(ev) {
-    if (menu || viewer || compare || slideshow) return;
+    if (menu || viewer || compare || slideshow || batch || create) return;
     const k = ev.key;
     const ctrl = ev.ctrlKey || ev.metaKey;
     if (k === "ArrowRight" && bprefs.view !== "details") moveSel(1, ev);
@@ -345,8 +410,11 @@
   }
 
   function onWindowKey(ev) {
-    if (!active || menu || viewer || compare || slideshow || document.querySelector("dialog[open]")) return;
+    if (!active || menu || viewer || compare || slideshow || batch || create || document.querySelector("dialog[open]")) return;
     if (ev.key === "F5") { ev.preventDefault(); refresh(); }
+    else if (ev.key === "F3") { ev.preventDefault(); startBatch("convert"); }
+    else if ((ev.ctrlKey || ev.metaKey) && (ev.key === "d" || ev.key === "D") && browser.path) { ev.preventDefault(); toggleFav(browser.path); }
+    else if (ev.key === "F4") { ev.preventDefault(); startBatch("rename"); }
     else if (ev.altKey && ev.key === "ArrowLeft") { ev.preventDefault(); goBack(); }
     else if (ev.altKey && ev.key === "ArrowRight") { ev.preventDefault(); goForward(); }
     else if (ev.altKey && ev.key === "ArrowUp") { ev.preventDefault(); goUp(); }
@@ -414,12 +482,17 @@
       items.push({ label: "Open", icon: "open", key: "Enter", bold: true, action: () => openEntry(e) });
       items.push("-", ...toolItems(pathOf(e)), "-");
       items.push({ label: "Show in Explorer", icon: "explorer", action: () => revealItem(e.id).catch((x) => say(String(x))) });
+      items.push("-", ...favItems(pathOf(e)));
     } else {
       if (MEDIA.has(e.kind)) items.push({ label: "View full screen", icon: "fullscreen", key: "Enter", bold: true, action: () => openEntry(e) });
       if (MEDIA.has(e.kind)) {
         const n = selEntries.filter((x) => MEDIA.has(x.kind)).length;
         items.push({ label: n >= 2 ? `Slideshow of these ${n}` : "Slideshow from here", icon: "slideshow", key: "S", action: startSlideshow });
       }
+      const nf = selEntries.filter((x) => !x.dir).length;
+      items.push({ label: nf > 1 ? `Convert / resize these ${nf}…` : "Convert / resize…", icon: "resize", key: "F3", action: () => startBatch("convert") });
+      items.push({ label: nf > 1 ? `Rename these ${nf}…` : "Batch rename…", icon: "list", key: "F4", action: () => startBatch("rename") });
+      items.push({ label: "Contact sheet, PDF or ZIP…", icon: "thumbs", action: () => startCreate(MEDIA.has(e.kind) ? "sheet" : "zip") });
       const m = compareable().length;
       if (m >= 2) items.push({ label: m <= 4 ? `Compare ${m} side by side` : "Compare side by side (2 to 4)", icon: "compare", key: "P", disabled: m > 4, action: startCompare });
       const r = ratable();
@@ -444,12 +517,16 @@
       x: ev.clientX, y: ev.clientY,
       items: [
         ...toolItems(browser.path),
-        { label: "Slideshow of this folder", icon: "slideshow", key: "S", action: startSlideshow }, "-",
+        { label: "Slideshow of this folder", icon: "slideshow", key: "S", action: startSlideshow },
+        { label: "Convert / resize all…", icon: "resize", key: "F3", action: () => startBatch("convert") },
+        { label: "Rename all…", icon: "list", key: "F4", action: () => startBatch("rename") },
+        { label: "Contact sheet, PDF or ZIP of this folder…", icon: "thumbs", action: () => startCreate("sheet") }, "-",
         { label: clip ? `Paste ${plural(clip.ids.length, "item", "items")} here` : "Paste", key: "Ctrl+V", disabled: !clip, action: () => paste() },
         { label: "New folder", icon: "folder", key: "F8", action: doNewFolder },
         { label: undoLabel ? `Undo: ${undoLabel}` : "Undo", key: "Ctrl+Z", disabled: !undoLabel, action: doUndo },
         "-",
         { label: "Refresh", icon: "refresh", key: "F5", action: refresh },
+        ...favItems(browser.path),
         { label: "Select all", key: "Ctrl+A", action: () => (browser.selected = entries.map((e) => e.id)) },
         { label: "Open in Explorer", icon: "explorer", action: () => openFolder(browser.path).catch((x) => say(String(x))) },
       ],
@@ -464,6 +541,7 @@
         "-", ...toolItems(node.path), "-",
         ...(clip ? [{ label: `Paste ${plural(clip.ids.length, "item", "items")} into “${node.label}”`, action: () => paste(node.path) }, "-"] : []),
         { label: "Open in Explorer", icon: "explorer", action: () => openFolder(node.path).catch((x) => say(String(x))) },
+        "-", ...favItems(node.path),
       ],
     };
   }
@@ -749,15 +827,30 @@
               <span class="ic"><Icon name="pc" size={16} /></span><span>This PC</span>
             </div>
           </li>
-          {#each roots.known as k (k.id)}
-            <TreeNode node={{ path: k.path, label: KNOWN_LABEL[k.id] ?? k.id, icon: k.id }} current={browser.path} {sep} follow={samePath(k.path, followRoot, sep)}
+          {#if bprefs.root}
+            <!-- "Show only this folder": one tree root, and a clear way back to all folders. -->
+            <li class="rootbar">
+              <span title={bprefs.root}>Only this folder</span>
+              <button onclick={() => setRoot("")} title="Show all drives and folders again">Show all</button>
+            </li>
+            <TreeNode node={{ path: bprefs.root, label: nameOf(bprefs.root) || bprefs.root, icon: "folder" }} current={browser.path} {sep} follow={true}
               onopen={navigate} oncontext={onTreeMenu} refreshKey={treeRefresh} ondragto={(ev) => dragTarget(ev, null)} ondropto={(ev, n) => dropOn(ev, n.path)} />
-          {/each}
-          <li class="gap" aria-hidden="true"></li>
-          {#each roots.volumes as v (v.path)}
-            <TreeNode node={{ path: v.path, label: volLabel(v), icon: volIcon(v), hint: v.total ? `${formatBytes(v.free)} free of ${formatBytes(v.total)}` : "No disk in the drive" }}
-              current={browser.path} {sep} follow={samePath(v.path, followRoot, sep)} onopen={navigate} oncontext={onTreeMenu} refreshKey={treeRefresh} ondragto={(ev) => dragTarget(ev, null)} ondropto={(ev, n) => dropOn(ev, n.path)} />
-          {/each}
+          {:else}
+            {#each bprefs.favs as f (f.path)}
+              <TreeNode node={{ path: f.path, label: f.label, icon: "star", hint: f.path }} current={browser.path} {sep} follow={samePath(f.path, followRoot, sep)}
+                onopen={navigate} oncontext={onTreeMenu} refreshKey={treeRefresh} ondragto={(ev) => dragTarget(ev, null)} ondropto={(ev, n) => dropOn(ev, n.path)} />
+            {/each}
+            {#if bprefs.favs.length}<li class="gap" aria-hidden="true"></li>{/if}
+            {#each roots.known as k (k.id)}
+              <TreeNode node={{ path: k.path, label: KNOWN_LABEL[k.id] ?? k.id, icon: k.id }} current={browser.path} {sep} follow={samePath(k.path, followRoot, sep)}
+                onopen={navigate} oncontext={onTreeMenu} refreshKey={treeRefresh} ondragto={(ev) => dragTarget(ev, null)} ondropto={(ev, n) => dropOn(ev, n.path)} />
+            {/each}
+            <li class="gap" aria-hidden="true"></li>
+            {#each roots.volumes as v (v.path)}
+              <TreeNode node={{ path: v.path, label: volLabel(v), icon: volIcon(v), hint: v.total ? `${formatBytes(v.free)} free of ${formatBytes(v.total)}` : "No disk in the drive" }}
+                current={browser.path} {sep} follow={samePath(v.path, followRoot, sep)} onopen={navigate} oncontext={onTreeMenu} refreshKey={treeRefresh} ondragto={(ev) => dragTarget(ev, null)} ondropto={(ev, n) => dropOn(ev, n.path)} />
+            {/each}
+          {/if}
         </ul>
       </nav>
       {#if bprefs.preview}
@@ -797,6 +890,16 @@
         <div class="msg error">{browser.error}</div>
       {:else if !browser.path}
         <!-- This PC -->
+        {#if bprefs.favs.length}
+          <h2 class="hd">Favourites</h2>
+          <div class="drives">
+            {#each bprefs.favs as f (f.path)}
+              <button class="drive" onclick={() => navigate(f.path)} title={f.path} oncontextmenu={(ev) => onTreeMenu(ev, { path: f.path, label: f.label })}>
+                <Icon name="star" size={30} /><span><strong>{f.label}</strong><small class="muted">{f.path}</small></span>
+              </button>
+            {/each}
+          </div>
+        {/if}
         <h2 class="hd">Folders</h2>
         <div class="drives">
           {#each roots.known as k (k.id)}
@@ -975,6 +1078,17 @@
     </div>
   </div>
 {/if}
+{#if create}<CreateDialog items={create.items} tab={create.tab} folder={nameOf(browser.path)} onclose={async (changed, name) => {
+  create = null;
+  if (changed) await refreshSelect(name ? [joinIn(browser.path, name, sep)] : []);
+  area?.focus();
+}} />{/if}
+{#if batch}<BatchDialog items={batch.items} tab={batch.tab} onclose={async (changed, go) => {
+  batch = null;
+  if (go) await navigate(go);
+  else if (changed) await refresh();
+  area?.focus();
+}} />{/if}
 {#if slideshow}<Slideshow items={slideshow.items} start={slideshow.start} onclose={(last) => {
   slideshow = null;
   const e = entries.find((x) => x.id === last);
@@ -1133,4 +1247,8 @@
   .status > span { padding: 0 12px; border-right: 1px solid var(--border); }
   .status > span:last-child, .status .spacer { border: none; }
   .spacer { flex: 1; }
+  .rootbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 2px 6px 6px; padding: 4px 8px;
+    background: var(--accent-soft); border-radius: var(--radius-sm); font-size: 12.5px; }
+  .rootbar span { font-weight: 600; }
+  .rootbar button { padding: 2px 8px; font-size: 12px; }
 </style>

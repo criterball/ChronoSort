@@ -13,6 +13,7 @@
   // photos) and handed over as a PNG; a logo is read by the backend from its file.
   import { untrack } from "svelte";
   import { editEffects, editWatermark, pickPicture } from "../lib/api.js";
+  import { textWatermarkPng, lastEffects, effectsForBackend, EFFECTS_MEMORY } from "../lib/watermark.js";
 
   // start: the edit state when the panel opened; onstate(editState); onclose(); onerror(message)
   let { start, onstate, onclose, onerror } = $props();
@@ -24,10 +25,8 @@
   const SIZE_LABEL = { rounded: "Corner size", vignette: "Strength" };
   const ACCENT_LABEL = { matte: "Line colour", shadow: "Shadow colour" };
   const COLOURS = ["#ffffff", "#f3ede2", "#000000", "#808080"];
-  const MEMORY = "chronosort.effects.v1";
 
   const hex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
-  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 
   // ---- settings ----
   const init = untrack(() => start?.effects);
@@ -41,17 +40,16 @@
   // Watermark source: "text" or "logo"; the text and how it looks.
   let src = $state(untrack(() => (start?.watermark && start.watermark !== "text" ? "logo" : "text")));
   let logoName = $state(untrack(() => (start?.watermark && start.watermark !== "text" ? start.watermark : "")));
+  let logoPath = $state(untrack(() => lastEffects()?.logoPath ?? ""));
   let txt = $state({ ...lastText });
   $effect(() => { Object.assign(lastText, $state.snapshot(txt)); });
-  let saved = $state(load());
+  let saved = $state(lastEffects());
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(MEMORY) ?? "null"); } catch { return null; }
-  }
   function remember() {
     try {
-      const v = { fx: $state.snapshot(fx), txt: $state.snapshot(txt), src };
-      localStorage.setItem(MEMORY, JSON.stringify(v));
+      // The logo's place is kept too, so the batch converter can use the same watermark.
+      const v = { fx: $state.snapshot(fx), txt: $state.snapshot(txt), src, logoPath };
+      localStorage.setItem(EFFECTS_MEMORY, JSON.stringify(v));
       saved = v;
     } catch { /* private window: no memory, nothing else changes */ }
   }
@@ -66,10 +64,7 @@
     if (sending) { again = true; return; }
     sending = true;
     try {
-      onstate?.(await editEffects({
-        frame: fx.frame, size: +fx.size, color: rgb(fx.color), accent: rgb(fx.accent),
-        watermark: { ...$state.snapshot(fx.wm), width: +fx.wm.width, margin: +fx.wm.margin, opacity: +fx.wm.opacity },
-      }));
+      onstate?.(await editEffects(effectsForBackend($state.snapshot(fx))));
     } catch (e) {
       onerror?.(String(e));
     } finally {
@@ -79,30 +74,7 @@
   }
 
   // ---- the watermark picture ----
-  function textPng() {
-    const t = txt.text.trim();
-    if (!t) return null;
-    const lines = t.split("\n");
-    const size = 160, lh = size * 1.2, pad = Math.ceil(size * 0.25);
-    const c = document.createElement("canvas");
-    const x = c.getContext("2d");
-    const font = `${txt.bold ? "700" : "400"} ${size}px "Segoe UI", system-ui, sans-serif`;
-    x.font = font;
-    const w = Math.ceil(Math.max(...lines.map((l) => x.measureText(l).width))) + 2 * pad;
-    c.width = Math.max(1, w);
-    c.height = Math.ceil(lines.length * lh) + 2 * pad;
-    x.font = font;
-    x.textBaseline = "top";
-    x.fillStyle = txt.color;
-    if (txt.outline) {
-      // A soft dark (or light) halo keeps the text readable on any background.
-      const light = rgb(txt.color).reduce((a, b) => a + b, 0) > 382;
-      x.shadowColor = light ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.65)";
-      x.shadowBlur = size * 0.12;
-    }
-    lines.forEach((l, n) => x.fillText(l, pad, pad + n * lh + size * 0.05));
-    return c.toDataURL("image/png");
-  }
+  const textPng = () => textWatermarkPng(txt);
   let textTimer;
   function textChanged() {
     clearTimeout(textTimer);
@@ -122,6 +94,7 @@
     if (!p) return;
     try {
       onstate?.(await editWatermark(null, p));
+      logoPath = p;
       logoName = p.split(/[\\/]/).pop();
     } catch (e) {
       onerror?.(String(e));
@@ -157,6 +130,15 @@
     txt = { ...saved.txt };
     src = saved.src;
     if (fx.wm.on && src === "text") await applyText();
+    else if (fx.wm.on && src === "logo" && saved.logoPath) {
+      try {
+        onstate?.(await editWatermark(null, saved.logoPath));
+        logoPath = saved.logoPath;
+        logoName = saved.logoPath.split(/[\\/]/).pop();
+      } catch (e) {
+        onerror?.(String(e));
+      }
+    }
     send(true);
   }
   async function removeAll() {

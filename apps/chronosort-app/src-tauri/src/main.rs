@@ -15,9 +15,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
+mod batch;
 mod browse;
+mod create;
 mod edit;
 mod fileops;
+mod histogram;
 mod meta;
 mod people;
 mod places;
@@ -1066,6 +1069,15 @@ fn main() {
             edit::edit_controls,
             edit::edit_set_dpi,
             edit::edit_effects,
+            histogram::image_histogram,
+            create::create_sizes,
+            create::create_sheet,
+            create::create_pdf,
+            create::create_zip,
+            batch::batch_convert,
+            batch::batch_rename,
+            batch::batch_rename_preview,
+            batch::batch_cancel,
             slideshow::slideshow_music,
             slideshow::slideshow_awake,
             slideshow::slideshow_playable,

@@ -48,6 +48,11 @@ pub enum Undo {
     },
     /// Top-level items: original place -> new place.
     Moved(Vec<(PathBuf, PathBuf)>),
+    /// A batch rename: its steps (undone like `Moved`) and how many names changed.
+    RenamedMany {
+        steps: Vec<(PathBuf, PathBuf)>,
+        names: usize,
+    },
     /// Sent to the Recycle Bin at this time.
     Trashed {
         items: Vec<PathBuf>,
@@ -433,7 +438,7 @@ fn same(a: &Path, b: &Path) -> bool {
 
 // ---------------------------------------------------------------- undo
 
-fn undo_op(op: Undo) -> Result<String, String> {
+pub(crate) fn undo_op(op: Undo) -> Result<String, String> {
     match op {
         Undo::NewFolder(p) => {
             fs::remove_dir(&p)
@@ -466,6 +471,10 @@ fn undo_op(op: Undo) -> Result<String, String> {
                 format!("{removed} copies removed.")
             })
         }
+        Undo::RenamedMany { steps, names } => match undo_op(Undo::Moved(steps)) {
+            Ok(_) => Ok(format!("{names} old names put back.")),
+            Err(e) => Err(format!("Not every old name could be put back: {e}")),
+        },
         Undo::Moved(pairs) => {
             let mut back = 0;
             let mut problems = Vec::new();

@@ -356,24 +356,24 @@
   .show { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.72); display: grid; place-items: center; outline: none; }
   .show.play { background: #000; }
   .show.nocursor { cursor: none; }
-  .card { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--panel, #1e2128);
-    color: var(--text, #e8eaed); border: 1px solid var(--border, #ffffff22); border-radius: 14px; padding: 20px 22px; box-shadow: 0 20px 60px #0008; }
+  .card { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface);
+    color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: 0 20px 60px #0008; }
   h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 20px; }
-  .muted { color: var(--muted, #9aa1ab); }
+  .muted { color: var(--muted); }
   .small { font-size: 12.5px; }
   .lab { margin: 14px 0 6px; font-weight: 600; font-size: 14px; }
   .sl { display: block; margin-top: 14px; }
   .sl span { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; }
   .sl b { font-weight: 500; }
-  input[type="range"] { width: 100%; accent-color: var(--accent, #6f9bff); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
   .seg button { flex: 1; min-width: 80px; padding: 7px 8px; }
-  .seg button.on { background: var(--accent, #3a64c8); border-color: var(--accent, #3a64c8); color: var(--accent-text, #fff); }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
   .chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
   .row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 6px; }
   .music { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .songs { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .err { color: var(--danger, #ff8080); font-size: 13px; }
+  .err { color: var(--red); font-size: 13px; }
   .keys { margin-top: 16px; }
   .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
   .btns button { padding: 8px 16px; }

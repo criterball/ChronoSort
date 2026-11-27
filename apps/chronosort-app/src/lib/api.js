@@ -124,6 +124,17 @@ export const editWatermark = (png, path) => invoke("edit_watermark", { png, path
 /** mode "copy" | "replace"; format "JPEG" | "PNG" | "TIFF" | "WebP". */
 export const editSave = (mode, format, quality, name = null) => invoke("edit_save", { mode, format, quality, name });
 export const editFormats = () => invoke("edit_formats");
+export const imageHistogram = (id, edit) => invoke("image_histogram", { id, edit });
+// Create: contact sheet / joined picture, PDF, ZIP (progress: "create-progress").
+export const createSizes = (ids) => invoke("create_sizes", { ids });
+export const createSheet = (ids, opts) => invoke("create_sheet", { ids, opts });
+export const createPdf = (ids, opts) => invoke("create_pdf", { ids, opts });
+export const createZip = (ids, name) => invoke("create_zip", { ids, name });
+// Batch convert / resize and rename (progress: "batch-progress").
+export const batchConvert = (ids, opts) => invoke("batch_convert", { ids, opts });
+export const batchRenamePreview = (ids, opts) => invoke("batch_rename_preview", { ids, opts });
+export const batchRename = (ids, opts) => invoke("batch_rename", { ids, opts });
+export const batchCancel = () => invoke("batch_cancel");
 // Slideshow: videos and music stream from media://<id> (only ids the app handed out).
 export const mediaUrl = (id) => convertFileSrc(String(id), "media");
 export const slideshowMusic = (paths) => invoke("slideshow_music", { paths });

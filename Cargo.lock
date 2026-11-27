@@ -521,6 +521,7 @@ dependencies = [
  "cs-thumb",
  "cs-vision",
  "image",
+ "rayon",
  "serde",
  "serde_json",
  "tauri",
@@ -528,6 +529,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tempfile",
  "trash",
+ "zip",
 ]
 
 [[package]]

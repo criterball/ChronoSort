@@ -143,6 +143,32 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
 
+## 2026-11-27 (afternoon): pushed 3c77509 (items 1-7, 4, 5); then nice-to-haves 8, 9, 10 (not committed)
+- **8 Batch** (`BatchDialog.svelte`, `src-tauri/src/batch.rs`; F3 convert/resize, F4 rename, right-click, folder menu):
+  convert = copies into a new "Converted" folder (or a chosen one), format keep/JPEG/PNG/TIFF/WebP + quality, resize
+  long side / % / fit w×h (never enlarges), optional last frame+watermark (text via lib/watermark.js, logo via saved
+  `logoPath`), RAW → embedded JPEG, dates kept, rayon pool ≤4, `batch-progress` + Stop, Undo::Copied. Rename = pattern
+  {name} {num} {year}…{second} {folder}, start/digits, find→replace, ext case, sidecars follow their photo (and are
+  hidden from the numbered list), live preview with clash rows in red, two-step temp rename (swaps OK), rollback on
+  failure, `Undo::RenamedMany` ("N old names put back"). 6 tests incl. real swap + undo. Click-tested both + Undo.
+- **9 Viewer**: keys 2–9 = 200–900 % (zoomTo keeps the centre; max zoom now 10× real), Shift+W / Shift+H fit
+  width / height (+ ↔ ↕ buttons), Ctrl+H histogram (`HistogramBox.svelte`, backend `histogram.rs` from the shown
+  preview / edit preview — the page cannot read pixels from fthumb:), magnifier lens while holding the left button on
+  a fitted photo (original file when native, ≥ 2× shown). Click-tested.
+- **10 Favourites** (bprefs.favs, Ctrl+D, right-click Add/Remove/Move up/down, star rows at the top of the tree and on
+  This PC) and **Show only this folder** (bprefs.root, "Only this folder · Show all" bar). Click-tested.
+- **11 Create** (`CreateDialog.svelte`, `src-tauri/src/create.rs`; right-click "Contact sheet, PDF or ZIP…"):
+  contact sheet (A4/Letter, portrait/landscape, 150/300 dpi, 2–10 per row, names/dates, title, several sheets when
+  needed), join into one picture (side by side / one below the other, height, gap, ≤120 MP), PDF (one photo per page,
+  page turned to the photo, upright RGB JPEGs embedded unchanged, others re-encoded ≤3508 px; own minimal PDF writer),
+  ZIP (zip crate as cs-ai uses it; jpg/mp4/raw stored, others deflated, unique names, .part then rename). Layout and
+  text (overlay PNG) are made in the page, so no fonts are shipped; `create_sizes` gives upright sizes for strips.
+  Output next to the first file, Undo::Copied, `create-progress`. 3 tests (cell placement, PDF xref offsets, stored
+  kinds). Click-tested all four (temp/cs_batch).
+- check.sh passes after items 8-11 (clippy fixes: type aliases Made/Civil); release → dist/ChronoSort.exe 49.5 MB, 14:17. NOT committed; asked the user (commit 8-11? which of 12-15?).
+- Theme tokens are --surface/--surface-2/--text/--muted/--border/--accent/--red/--green (NOT --panel/--danger).
+  A global `.bar` class exists in app.css (progress bars).
+
 ## 2026-11-27 (later): nice-to-haves 4 + 5 built (not committed)
 - **4 Frame and watermark** (viewer key F, `EffectsPanel.svelte`): `cs-adjust/src/effects.rs` — frames none/border/matte
   (line)/instant/rounded/shadow (erf soft shadow)/vignette, sizes in % of the short side; watermark layer (text drawn on a

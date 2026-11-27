@@ -314,6 +314,19 @@ fn native_type(fmt: cs_scan::Format) -> Option<&'static str> {
 /// Largest original the viewer loads at full size (bigger ones stay at preview size).
 const MAX_ORIGINAL: u64 = 256 * 1024 * 1024;
 
+/// The viewer's preview of a photo or video (JPEG bytes from the thumbnail cache).
+pub(crate) fn preview_bytes(state: &AppState, id: u64) -> Res<Vec<u8>> {
+    let file = state.browse.path(id).ok_or("unknown file")?;
+    let meta = std::fs::metadata(&file).map_err(err)?;
+    let fmt = real_format(&file);
+    if fmt.kind() != cs_model::MediaKind::Image && fmt.kind() != cs_model::MediaKind::Video {
+        return Err("not a photo or video".into());
+    }
+    let size = size_for("p").ok_or("bad size")?;
+    let p = state.thumbs.get_sized(&cache_key(&file, &meta), &file, fmt, size).map_err(err)?;
+    std::fs::read(p).map_err(err)
+}
+
 /// `fthumb://<id>_<s|m|l|p|o>`; `o` = the original file, only for formats the webview draws.
 pub fn fthumb_response(app: &tauri::AppHandle, path: &str) -> tauri::http::Response<Vec<u8>> {
     use tauri::Manager;

@@ -5,6 +5,7 @@
   import AdjustPanel from "./AdjustPanel.svelte";
   import RetouchPanel from "./RetouchPanel.svelte";
   import EffectsPanel from "./EffectsPanel.svelte";
+  import HistogramBox from "./HistogramBox.svelte";
   import RetouchOverlay from "./RetouchOverlay.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
@@ -41,6 +42,13 @@
   let saveDlg = $state(null); // { mode, format, quality }
   let adjusting = $state(false); // the colour and light panel is open
   let effecting = $state(false); // the frame and watermark panel is open
+  // The histogram box (Ctrl+H) stays on for the next photos and next time.
+  let showHisto = $state((() => { try { return localStorage.getItem("chronosort.viewer.histogram") === "1"; } catch { return false; } })());
+  function toggleHisto() {
+    showHisto = !showHisto;
+    try { localStorage.setItem("chronosort.viewer.histogram", showHisto ? "1" : "0"); } catch { /* fine */ }
+  }
+  let lens = $state(null); // magnifier: { x, y, bx, by, bw, bh } while the mouse button is held on a fitted photo
   let straight = $state(null); // { angle, frame: {x,y,w,h}, draw, line: {x1,y1,x2,y2} | null }
   let canvasDlg = $state(null); // { w, h, anchor, color }
   let dpiDlg = $state(null); // { dpi }
@@ -215,7 +223,7 @@
   let dpr = $state(window.devicePixelRatio || 1);
   let scaleF = $derived((real && natural.w ? real.w / natural.w : 1) / dpr);
   function setZoom(z) {
-    zoom = Math.min(8 * scaleF, Math.max(0.02, z));
+    zoom = Math.min(10 * scaleF, Math.max(0.02, z));
     // Past the preview's own pixels: load the original so the picture stays sharp.
     if (!edit && !hiRes && fullSize?.original && real && real.w > natural.w * 1.01 && zoom * dpr > 1.001) hiRes = true;
   }
@@ -226,6 +234,23 @@
   });
   const zoomBy = (f) => setZoom((zoom || fitScale()) * f);
   const actualSize = () => setZoom(scaleF);
+  // Zoom to `z`, keeping the middle of the screen on the same spot of the picture.
+  function zoomTo(z) {
+    const old = zoom || fitScale();
+    setZoom(z);
+    pan = { x: (pan.x * zoom) / old, y: (pan.y * zoom) / old };
+  }
+  // Fill the width (or height) of the screen; start at the top (or left) edge.
+  function fitWidth() {
+    if (!el || !natural.w) return;
+    setZoom(el.clientWidth / natural.w);
+    pan = { x: 0, y: Math.max(0, (natural.h * zoom - el.clientHeight) / 2) };
+  }
+  function fitHeight() {
+    if (!el || !natural.w) return;
+    setZoom(el.clientHeight / natural.h);
+    pan = { x: Math.max(0, (natural.w * zoom - el.clientWidth) / 2), y: 0 };
+  }
   const fit = () => { zoom = 0; pan = { x: 0, y: 0 }; };
   // Percent of the REAL picture, not of the preview.
   let pct = $derived(natural.w ? Math.round((100 * (zoom || fitScale())) / scaleF) : 0);
@@ -555,6 +580,7 @@
     else if (ctrl && (k === "s" || k === "S")) startSave();
     else if (ctrl && (k === "z" || k === "Z")) stepBack();
     else if (ctrl && /^[0-5]$/.test(k)) rateCur(+k);
+    else if (ctrl && (k === "h" || k === "H")) toggleHisto();
     else if (ctrl) return;
     else if (k === "q" || k === "Q") tagCur();
     else if (k === "ArrowRight" || k === "PageDown" || k === " ") next();
@@ -563,11 +589,14 @@
     else if (k === "End") show(items.length - 1);
     else if (k === "0" || k === "b" || k === "B") fit();
     else if (k === "1" || k === "a" || k === "A") actualSize();
+    else if (/^[2-9]$/.test(k)) zoomTo(+k * scaleF); // 200 % … 900 %
     else if (k === "+" || k === "=") zoomBy(1.25);
     else if (k === "-") zoomBy(0.8);
     else if (k === "i" || k === "I") pinned = pinned === "right" ? "" : "right";
     else if (k === "l" || k === "L") doEdit({ op: "rotate_left" });
     else if (k === "r" || k === "R") doEdit({ op: "rotate_right" });
+    else if (k === "W" && e.shiftKey) fitWidth();
+    else if (k === "H" && e.shiftKey) fitHeight();
     else if (k === "h" || k === "H") doEdit({ op: "flip_horizontal" });
     else if (k === "v" || k === "V") doEdit({ op: "flip_vertical" });
     else if (k === "x" || k === "X") startCrop();
@@ -604,6 +633,7 @@
   }
 
   function onDown(e) {
+    if (e.button === 0 && !zoom && !crop && !rt && !straight && e.target === imgEl) return startLens(e);
     if (e.button !== 0 || !zoom || crop || e.target.closest(".fly")) return;
     const sx = e.clientX - pan.x, sy = e.clientY - pan.y;
     const mv = (m) => (pan = { x: m.clientX - sx, y: m.clientY - sy });
@@ -611,6 +641,27 @@
     window.addEventListener("pointermove", mv);
     window.addEventListener("pointerup", up);
   }
+
+  // Magnifier: while the left button is held on a fitted photo, a round lens shows
+  // that spot at real pixels (at least twice the shown size).
+  const LENS = 260;
+  function startLens(e) {
+    e.preventDefault();
+    const show = (m) => {
+      const r = imgEl.getBoundingClientRect();
+      const shown = r.width / natural.w; // CSS px per preview px
+      const k = Math.max(scaleF, shown * 2); // CSS px per preview px inside the lens
+      const fx = (m.clientX - r.left) / shown, fy = (m.clientY - r.top) / shown;
+      lens = { x: m.clientX, y: m.clientY, bw: natural.w * k, bh: natural.h * k, bx: LENS / 2 - fx * k, by: LENS / 2 - fy * k,
+        pct: Math.round((100 * k) / scaleF) };
+    };
+    show(e);
+    const up = () => { lens = null; window.removeEventListener("pointermove", show); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", show);
+    window.addEventListener("pointerup", up);
+  }
+  // The lens uses the original file when the webview can draw it (sharp), else the preview.
+  let lensSrc = $derived(!edit && cur && fullSize?.original ? fthumbUrl(cur.id, "o") : src);
 
   // Navigator: where the visible window sits in the zoomed picture (0..1).
   let navBox = $derived.by(() => {
@@ -637,7 +688,7 @@
 
   let src = $derived(edit ? editUrl(`${cur.id}-${edit.version}${rawView ? "-raw" : ""}`) : cur ? fthumbUrl(cur.id, hiRes ? "o" : "p") : "");
   let pre = $derived(items.length > 1 ? [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]] : []);
-  const ZOOMS = [10, 25, 50, 75, 100, 150, 200, 300, 400];
+  const ZOOMS = [10, 25, 50, 75, 100, 150, 200, 300, 400, 600, 900];
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -658,6 +709,13 @@
       {#if mark?.rating}<span class="vstars" title="{mark.rating} of 5 stars (Ctrl+0–5)">{"★".repeat(mark.rating)}</span>{/if}
       {#if mark?.tagged}<span class="vtag">● tagged</span>{/if}
       {#if dirty}<span class="unsaved">● edited, not saved yet</span>{/if}
+    </div>
+  {/if}
+  {#if cur && showHisto && !failed}<HistogramBox id={cur.id} edit={!!edit} version={edit?.version ?? 0} onclose={toggleHisto} />{/if}
+  {#if lens}
+    <div class="lens" style="left:{lens.x - LENS / 2}px; top:{lens.y - LENS / 2}px; width:{LENS}px; height:{LENS}px;
+      background-image:url('{lensSrc}'); background-size:{lens.bw}px {lens.bh}px; background-position:{lens.bx}px {lens.by}px">
+      <span>{lens.pct}%</span>
     </div>
   {/if}
   {#each pre as p (p.id)}<link rel="prefetch" href={fthumbUrl(p.id, "p")} />{/each}
@@ -855,6 +913,9 @@
       <button title="Zoom in (+, Ctrl+wheel)" onclick={() => zoomBy(1.25)}><Icon name="zoom-in" /></button>
       <button title="Actual size (1)" onclick={actualSize}><span class="t">1:1</span></button>
       <button title="Fit to screen (0)" onclick={fit}><Icon name="fullscreen" /></button>
+      <button title="Fit the width (Shift+W)" onclick={fitWidth}><span class="t">↔</span></button>
+      <button title="Fit the height (Shift+H)" onclick={fitHeight}><span class="t">↕</span></button>
+      <button title="Histogram (Ctrl+H)" class:on={showHisto} onclick={toggleHisto}><Icon name="histogram" /></button>
       <span class="sep"></span>
       <button title="Rotate left (L)" onclick={() => doEdit({ op: "rotate_left" })}><Icon name="rot-left" /></button>
       <button title="Rotate right (R)" onclick={() => doEdit({ op: "rotate_right" })}><Icon name="rot-right" /></button>
@@ -968,4 +1029,9 @@
   .hd.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
   .hd.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
   .dims { position: absolute; bottom: -24px; left: 0; font: 12px var(--mono); color: #ffc46b; background: rgba(0, 0, 0, 0.7); padding: 1px 6px; border-radius: 4px; }
+  .lens { position: fixed; z-index: 6; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 6px 24px #000a, inset 0 0 0 1px #0006;
+    background-repeat: no-repeat; background-color: #000; pointer-events: none; image-rendering: auto; }
+  .lens span { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: #000a; color: #fff;
+    font-size: 11px; padding: 1px 6px; border-radius: 8px; }
+  .vbar button.on { background: #3a64c8; }
 </style>

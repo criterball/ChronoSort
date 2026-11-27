@@ -366,6 +366,22 @@ pub fn edit_close() {
 /// retouching, whose marks are placed on the picture itself).
 pub fn edit_response(raw: bool) -> tauri::http::Response<Vec<u8>> {
     let r = (|| -> Res<Vec<u8>> {
+        let rgb = edit_preview(raw)?;
+        let mut out = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85).encode_image(&rgb).map_err(err)?;
+        Ok(out)
+    })();
+    let b = tauri::http::Response::builder().header("Cache-Control", "no-store");
+    match r {
+        Ok(bytes) => b.header("Content-Type", "image/jpeg").status(200).body(bytes),
+        Err(e) => b.header("Content-Type", "text/plain").status(404).body(e.into_bytes()),
+    }
+    .expect("static response")
+}
+
+/// The edited picture as shown in the viewer (longest side 1600 px), as RGB.
+pub(crate) fn edit_preview(raw: bool) -> Res<image::RgbImage> {
+    {
         let mut g = lock();
         let s = g.as_mut().ok_or("nothing open")?;
         if s.preview_base.is_none() {
@@ -381,17 +397,8 @@ pub fn edit_response(raw: bool) -> tauri::http::Response<Vec<u8>> {
         if s.has_effects() && !raw {
             shown = cs_adjust::effects::apply(&shown, &s.effects, s.layer())?;
         }
-        let rgb = cs_image::preview_rgb8(&shown, PREVIEW_SIDE)?;
-        let mut out = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85).encode_image(&rgb).map_err(err)?;
-        Ok(out)
-    })();
-    let b = tauri::http::Response::builder().header("Cache-Control", "no-store");
-    match r {
-        Ok(bytes) => b.header("Content-Type", "image/jpeg").status(200).body(bytes),
-        Err(e) => b.header("Content-Type", "text/plain").status(404).body(e.into_bytes()),
+        cs_image::preview_rgb8(&shown, PREVIEW_SIDE)
     }
-    .expect("static response")
 }
 
 #[derive(Serialize)]

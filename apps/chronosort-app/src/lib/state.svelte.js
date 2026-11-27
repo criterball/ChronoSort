@@ -107,7 +107,8 @@ export function resetPeople() {
 
 // File browser (the start screen). View choices are remembered between runs.
 const BKEY = "chronosort.browser.v1";
-const BDEF = { view: "thumbs", size: "m", show: "all", sortBy: "name", sortDesc: false, treeSide: "left", preview: true, showHidden: false, last: "" };
+// favs: favourite folders [{ path, label }]; root: show only this folder in the tree ("" = all).
+const BDEF = { view: "thumbs", size: "m", show: "all", sortBy: "name", sortDesc: false, treeSide: "left", preview: true, showHidden: false, last: "", favs: [], root: "" };
 function loadBrowserPrefs() {
   try {
     return { ...BDEF, ...JSON.parse(localStorage.getItem(BKEY) ?? "{}") };
