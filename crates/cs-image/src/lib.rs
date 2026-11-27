@@ -13,6 +13,7 @@
 //! tag value for that (the app writes it with ExifTool).
 
 pub mod geometry;
+pub mod jpegcrop;
 
 use craft_image_codecs as cc;
 pub use craft_image_codecs::{ChannelLayout, Format, Image, SampleType};

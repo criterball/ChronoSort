@@ -102,6 +102,8 @@ pub struct MetaChanges {
     pub keywords: Option<Vec<String>>,
     pub author: Option<String>,
     pub copyright: Option<String>,
+    /// The JPEG comment (COM segment).
+    pub comment: Option<String>,
     /// New position (signed decimal degrees).
     pub gps: Option<(f64, f64)>,
     /// Remove the position (and the place names with it).
@@ -187,6 +189,9 @@ pub fn write_args(c: &MetaChanges) -> Res<Vec<String>> {
     if let Some(t) = &c.copyright {
         let t = clean(t);
         a.extend([format!("-XMP-dc:Rights={t}"), format!("-EXIF:Copyright={t}")]);
+    }
+    if let Some(t) = &c.comment {
+        a.push(format!("-File:Comment={}", clean(t)));
     }
     let gps = if c.clear_gps { Some(None) } else { c.gps.map(Some) };
     // A general area or country only (no town, no position): same tags as

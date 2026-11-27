@@ -143,6 +143,27 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
 
+## 2026-11-27 (late afternoon): pushed 83c97e7 (items 8-11); then 13 and 15 (not committed)
+- **15 Thumbnail cache** (user: "the cache thumbnails are stored alongside the app so it's portable"): `cache_dir`
+  is now `<exe dir>\ChronoSortData\cache` whenever that folder is writable (portable or not; AppData cache only as a
+  fallback, e.g. Program Files). `thumbcache.rs`: info (count, size, beside_program, old AppData cache), empty,
+  trim to a limit (LRU by mtime; `cs_thumb` now touches a hit at most once a day), remove the old AppData cache,
+  prescan a folder (+sub-folders, sizes 320/640[/1280], rayon ≤4, `cache-progress`, Stop). UI: Settings →
+  Thumbnails (`ThumbCache.svelte`, limit in localStorage `chronosort.thumbcache.v1`, default 2 GB, trimmed 15 s
+  after start), right-click folder → Make thumbnails now (browser job card, Stop). `.gitignore` ChronoSortData/.
+  Note: the user's AppData still has 22.8 MB of old thumbnails (left for them: "Remove the old cache" button).
+- **13** `crates/cs-image/src/jpegcrop.rs`: own lossless JPEG crop (baseline/extended Huffman, 8-bit, one
+  interleaved scan, restart markers read; progressive/arithmetic/lossless refused with a message). Copies the
+  quantised blocks, re-encodes Huffman with optimal tables, left/top snap to the MCU grid, right/bottom exact,
+  `upright_to_stored` for EXIF orientations. Real NASA JPEGs: max pixel difference 0, 22 MP in 79 ms
+  (`cargo run --release -p cs-image --example lossless_crop -- files…`). App `privacy.rs`: `jpeg_lossless_crop`
+  → `<stem>_crop.jpg` (ExifImageWidth/Height fixed, stale IFD1 thumbnail removed, dates kept, Undo::Copied); viewer
+  Crop panel button "Lossless crop to a new file" (only unedited JPEGs). `strip_meta(ids, "place"|"all")` with
+  backups + Undo::MetaEditedMany (right-click photos); "all" keeps Orientation + ICC. JPEG comment field
+  (`-File:Comment`) in the info panel edit form. Tests incl. real ExifTool strip → undo = exact bytes.
+  Click-tested: lossless crop (768×957, EXIF size right), remove place via the real dialog + Ctrl+Z.
+- check.sh passes (clippy: Rect alias, snapped takes tuples, is_multiple_of, slice::from_ref); release → dist 15:11 (49.7 MB). dist/ChronoSort.exe now keeps thumbnails in dist/ChronoSortData/cache. NOT committed: asked the user.
+
 ## 2026-11-27 (afternoon): pushed 3c77509 (items 1-7, 4, 5); then nice-to-haves 8, 9, 10 (not committed)
 - **8 Batch** (`BatchDialog.svelte`, `src-tauri/src/batch.rs`; F3 convert/resize, F4 rename, right-click, folder menu):
   convert = copies into a new "Converted" folder (or a chosen one), format keep/JPEG/PNG/TIFF/WebP + quality, resize

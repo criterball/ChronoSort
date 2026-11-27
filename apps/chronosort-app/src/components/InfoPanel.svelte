@@ -58,6 +58,7 @@
       keywords: row(["Subject", "Keywords", "XPKeywords"]).replace(/;\s*/g, ", "),
       author: row(["Creator", "Artist", "By-line"]),
       copyright: row(["Rights", "Copyright", "CopyrightNotice"]),
+      comment: row(["Comment"]),
       lat: info?.gps ? info.gps[0].toFixed(6) : "",
       lon: info?.gps ? info.gps[1].toFixed(6) : "",
     };
@@ -80,6 +81,7 @@
     if (f.keywords !== o.keywords) ch.keywords = f.keywords.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
     if (f.author !== o.author) ch.author = f.author;
     if (f.copyright !== o.copyright) ch.copyright = f.copyright;
+    if (f.comment !== o.comment) ch.comment = f.comment;
     if (form.place?.area && !f.lat.trim() && !f.lon.trim()) {
       // A general area / country only: names without a position (an old one is removed).
       const p = form.place;
@@ -191,6 +193,7 @@
       <label>Keywords <input bind:value={form.keywords} placeholder="beach, family, 2004" /></label>
       <label>Author <input bind:value={form.author} /></label>
       <label>Copyright <input bind:value={form.copyright} /></label>
+      {#if /\.(jpe?g|jfif)$/i.test(item?.name ?? "")}<label>JPEG comment <input bind:value={form.comment} /></label>{/if}
       <fieldset>
         <legend>Place (GPS + town, region, country)</legend>
         <input bind:value={placeQ} oninput={searchPlace} placeholder="Find a town, area or country… (offline list)" />

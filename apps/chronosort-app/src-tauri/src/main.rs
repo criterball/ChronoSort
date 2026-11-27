@@ -25,9 +25,11 @@ mod meta;
 mod people;
 mod places;
 mod portable;
+mod privacy;
 mod rating;
 mod review;
 mod slideshow;
+mod thumbcache;
 mod vision;
 
 #[derive(Default)]
@@ -70,12 +72,17 @@ pub fn data_dir(app: &tauri::AppHandle) -> Res<PathBuf> {
     }
 }
 
-/// Thumbnails cache (can be deleted at any time).
+/// Thumbnails cache (can be deleted at any time). It lives next to the program
+/// (`ChronoSortData\cache`), so it travels with ChronoSort; only when that folder
+/// cannot be written (e.g. under Program Files) the PC's own cache folder is used.
 fn cache_dir(app: &tauri::AppHandle) -> Res<PathBuf> {
-    match cs_ai::portable_root() {
-        Some(p) => Ok(p.join("cache")),
-        None => app.path().app_cache_dir().map_err(err),
+    if let Some(p) = cs_ai::portable_root() {
+        return Ok(p.join("cache"));
     }
+    if let Some(d) = thumbcache::beside_program() {
+        return Ok(d);
+    }
+    app.path().app_cache_dir().map_err(err)
 }
 
 pub fn now_unix() -> i64 {
@@ -1070,6 +1077,14 @@ fn main() {
             edit::edit_set_dpi,
             edit::edit_effects,
             histogram::image_histogram,
+            privacy::jpeg_lossless_crop,
+            privacy::strip_meta,
+            thumbcache::thumb_cache_info,
+            thumbcache::thumb_cache_clear,
+            thumbcache::thumb_cache_trim,
+            thumbcache::thumb_cache_clear_old,
+            thumbcache::thumb_cache_prescan,
+            thumbcache::thumb_cache_cancel,
             create::create_sizes,
             create::create_sheet,
             create::create_pdf,

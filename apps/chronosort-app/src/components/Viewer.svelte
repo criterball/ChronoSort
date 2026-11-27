@@ -10,7 +10,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     fthumbUrl, revealItem, formatBytes, confirmBox, imageSize,
-    editOpen, editApply, editStepBack, editClose, editSave, editUrl, editSetDpi, editRetouch,
+    editOpen, editApply, editStepBack, editClose, editSave, editUrl, editSetDpi, editRetouch, jpegLosslessCrop,
     readMarks, setRating, setTagged, starText,
   } from "../lib/api.js";
 
@@ -361,6 +361,24 @@
     const x = Math.max(0, Math.round((crop.sel.x - r.left) * sx)), y = Math.max(0, Math.round((crop.sel.y - r.top) * sy));
     return { x, y, w: Math.min(edit.width - x, Math.round(crop.sel.w * sx)), h: Math.min(edit.height - y, Math.round(crop.sel.h * sy)) };
   });
+  // A JPEG that is not edited yet can be cropped without any quality loss, into a new file.
+  let canLossless = $derived(!!edit && edit.format === "Jpeg" && edit.edits === 0 && !edit.adjusted && !edit.has_effects && edit.dpi == null);
+  async function losslessCrop() {
+    const p = cropPx;
+    if (!p || p.w <= 0 || p.h <= 0) return;
+    busy = true;
+    try {
+      const r = await jpegLosslessCrop(cur.id, p);
+      crop = null;
+      pinned = "";
+      onchanged?.();
+      say(`Saved “${r.name}” (${r.width} × ${r.height}) without any quality loss.${r.moved ? " The left or top edge moved a few pixels to JPEG's 8/16-pixel grid." : ""} The original is unchanged; Ctrl+Z in the browser removes the new file.`);
+    } catch (e) {
+      say(String(e));
+    } finally {
+      busy = false;
+    }
+  }
   async function applyCrop() {
     const p = cropPx;
     crop = null;
@@ -832,6 +850,10 @@
       </label>
       <p class="hint">Drag the box or its corners; drag outside it to draw a new one.{#if cropPx}<br />{cropPx.w} × {cropPx.h} pixels{/if}</p>
       <div class="row2"><button onclick={() => { crop = null; pinned = ""; }}>Cancel</button><button class="primary" onclick={applyCrop}>Crop <kbd>Enter</kbd></button></div>
+      {#if canLossless}
+        <button class="lossless" disabled={busy} onclick={losslessCrop} title="Cuts the JPEG without re-compressing it: no quality is lost. The edges snap to JPEG's 8/16-pixel grid.">Lossless crop to a new file</button>
+        <p class="hint">Keeps the photo's full quality; the original stays as it is.</p>
+      {/if}
     {:else if resize}
       <h3>Resize</h3>
       <p class="hint">Now {edit.width} × {edit.height} pixels</p>
@@ -1034,4 +1056,5 @@
   .lens span { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: #000a; color: #fff;
     font-size: 11px; padding: 1px 6px; border-radius: 8px; }
   .vbar button.on { background: #3a64c8; }
+  .lossless { width: calc(100% - 16px); margin: 8px 8px 0; }
 </style>

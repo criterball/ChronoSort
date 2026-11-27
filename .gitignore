@@ -36,3 +36,6 @@ node_modules/
 # FastStone clean-room study screenshots (third-party UI, private, never published)
 /docs/ui-reference/shots/
 
+
+# Thumbnail cache / portable data next to a built ChronoSort.exe
+ChronoSortData/

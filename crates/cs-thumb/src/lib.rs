@@ -134,6 +134,18 @@ pub fn load(path: &Path, format: Format, max_side: u32) -> Result<DynamicImage, 
     Ok(orient(img, orientation))
 }
 
+/// Mark a thumbnail as used (its modified time), at most once a day, so trimming
+/// the cache removes the ones nobody looked at for the longest time.
+fn touch_if_old(p: &Path, m: &std::fs::Metadata) {
+    const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+    let now = std::time::SystemTime::now();
+    if m.modified().ok().and_then(|t| now.duration_since(t).ok()).is_some_and(|age| age > DAY)
+        && let Ok(f) = std::fs::File::options().write(true).open(p)
+    {
+        let _ = f.set_modified(now);
+    }
+}
+
 /// Thumbnails stored as `<dir>/<hash[..2]>/<hash>.jpg`; content-addressed, so
 /// renaming or moving a photo never invalidates its thumbnail.
 pub struct Cache {
@@ -143,6 +155,11 @@ pub struct Cache {
 impl Cache {
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self { dir: dir.into() }
+    }
+
+    /// The folder the thumbnails are kept in.
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn path_for(&self, hash: &str) -> Option<PathBuf> {
@@ -163,7 +180,8 @@ impl Cache {
     /// Like [`Cache::get`] with another longest side (e.g. [`PREVIEW_SIZE`]).
     pub fn get_sized(&self, hash: &str, src: &Path, format: Format, size: u32) -> Result<PathBuf, ThumbError> {
         let p = self.path_for_size(hash, size).ok_or(ThumbError::Unsupported("invalid hash"))?;
-        if p.exists() {
+        if let Ok(m) = std::fs::metadata(&p) {
+            touch_if_old(&p, &m);
             return Ok(p);
         }
         let jpg = make(src, format, size)?;

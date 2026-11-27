@@ -10,6 +10,7 @@
   import Compare from "./Compare.svelte";
   import {
     browseRoots, listDir, folderSamples, revealItem, fthumbUrl, formatBytes, plural, confirmBox, openFolder, pickFolder,
+    thumbCachePrescan, thumbCacheCancel, stripMeta,
     binStatus, checkName, newFolder, renameItem, transferItems, deleteItems, cancelFileOp, lastUndo, undoFileOp, onProgress,
     readMarks, setRating, setTagged, starText,
   } from "../lib/api.js";
@@ -313,6 +314,53 @@
     create = { items: list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, modified: x.modified, dir: false })), tab };
   }
 
+  // Make the thumbnails of a folder (and its sub-folders) now, so browsing it later is instant.
+  async function prescanFolder(p) {
+    job = { title: `Making thumbnails for “${nameOf(p) || p}”…`, prog: null, cancel: () => thumbCacheCancel(), stop: "Stop" };
+    app.busy = true;
+    const un = await onProgress("cache-progress", (x) => { if (job) job.prog = { files_done: x.done, files_total: x.total, current: x.name }; });
+    try {
+      const sizes = bprefs.size === "l" ? [320, 640] : [320];
+      const r = await thumbCachePrescan(p, true, sizes);
+      say(r.photos ? `${r.cancelled ? "Stopped. " : ""}Thumbnails ready for ${plural(r.made, "photo or video", "photos and videos")}${r.failed ? ` (${r.failed} could not be read)` : ""}.` : "There are no photos or videos in that folder.");
+    } catch (e) {
+      say(String(e));
+    } finally {
+      un();
+      app.busy = false;
+      job = null;
+    }
+  }
+
+  // Remove information before sharing: "place" = GPS and place names; "all" = everything
+  // except the turn and the colour profile. Backups + one Undo, like star ratings.
+  async function removeInfo(what) {
+    const ids = selEntries.filter((e) => MEDIA.has(e.kind)).map((e) => e.id);
+    if (!ids.length) return say("Select one or more photos first.");
+    const n = plural(ids.length, "photo", "photos");
+    const ok = await confirmBox(
+      what === "place"
+        ? `Remove the place (GPS position, town, region, country) from ${n}?\n\nEverything else stays. A backup is kept, and Ctrl+Z puts it back.`
+        : `Remove all information from ${n}?\n\nThis takes out the camera, dates, place, names, keywords and comments — handy before sharing. The pictures themselves do not change. A backup is kept, and Ctrl+Z puts it all back.\n\nNote: without the date taken, ChronoSort can no longer sort these copies by year.`,
+      "Remove photo information", "Remove", "Keep it",
+    );
+    if (!ok) return;
+    job = { title: what === "place" ? `Removing the place from ${n}…` : `Removing the information from ${n}…`, prog: null, cancel: false };
+    try {
+      const r = await stripMeta(ids, what);
+      const msg = [];
+      if (r.done) msg.push(`${plural(r.done, "photo", "photos")} done`);
+      if (r.unchanged) msg.push(`${plural(r.unchanged, "photo had", "photos had")} nothing to remove`);
+      if (r.failed.length) msg.push(`not possible for ${r.failed.map(([f, w]) => `${f} (${w})`).join(", ")}`);
+      say(msg.join(" · ") + (r.done ? " (Ctrl+Z undoes)" : ""));
+    } catch (e) {
+      say(String(e));
+    } finally {
+      job = null;
+    }
+    await quietRefresh();
+  }
+
   // ---------- favourite folders and "show only this folder" ----------
   const isFav = (p) => bprefs.favs.some((f) => samePath(f.path, p, sep));
   function toggleFav(p) {
@@ -350,6 +398,7 @@
       ...(fav && bprefs.favs.length > 1
         ? [{ label: "Move up in favourites", disabled: i === 0, action: () => moveFav(p, -1) }, { label: "Move down in favourites", disabled: i === bprefs.favs.length - 1, action: () => moveFav(p, 1) }]
         : []),
+      { label: "Make thumbnails now", icon: "thumbs", action: () => prescanFolder(p) },
       samePath(bprefs.root, p, sep)
         ? { label: "Show all folders in the tree", icon: "pc", action: () => setRoot("") }
         : { label: "Show only this folder in the tree", icon: "tree-left", action: () => setRoot(p) },
@@ -493,6 +542,10 @@
       items.push({ label: nf > 1 ? `Convert / resize these ${nf}…` : "Convert / resize…", icon: "resize", key: "F3", action: () => startBatch("convert") });
       items.push({ label: nf > 1 ? `Rename these ${nf}…` : "Batch rename…", icon: "list", key: "F4", action: () => startBatch("rename") });
       items.push({ label: "Contact sheet, PDF or ZIP…", icon: "thumbs", action: () => startCreate(MEDIA.has(e.kind) ? "sheet" : "zip") });
+      if (MEDIA.has(e.kind)) {
+        items.push({ label: "Remove the place (GPS)…", icon: "pin", action: () => removeInfo("place") });
+        items.push({ label: "Remove all photo information…", icon: "close", action: () => removeInfo("all") });
+      }
       const m = compareable().length;
       if (m >= 2) items.push({ label: m <= 4 ? `Compare ${m} side by side` : "Compare side by side (2 to 4)", icon: "compare", key: "P", disabled: m > 4, action: startCompare });
       const r = ratable();
@@ -1074,7 +1127,7 @@
       {:else}
         <div class="pbar busy"><i></i></div>
       {/if}
-      {#if job.cancel}<button onclick={cancelFileOp}>Stop after this file</button>{/if}
+      {#if job.cancel}<button onclick={typeof job.cancel === "function" ? job.cancel : cancelFileOp}>{job.stop ?? "Stop after this file"}</button>{/if}
     </div>
   </div>
 {/if}

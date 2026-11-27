@@ -1,4 +1,8 @@
 <script>
+  import { thumbCacheTrim } from "./lib/api.js";
+  import { cacheLimit } from "./lib/thumbcache.js";
+  // Keep the thumbnail cache under the chosen size (quietly, a little after start-up).
+  setTimeout(() => { const l = cacheLimit(); if (l > 0) thumbCacheTrim(l).catch(() => {}); }, 15000);
   import { onMount } from "svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import Home from "./components/Home.svelte";

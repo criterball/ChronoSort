@@ -269,7 +269,7 @@ pub fn reveal_item(state: State<'_, AppState>, id: u64) -> Res<()> {
 
 /// Thumbnail sizes the UI may ask for: small/medium share the 320 px cache,
 /// large uses 640 px, `p` is the viewer preview.
-fn size_for(code: &str) -> Option<u32> {
+pub(crate) fn size_for(code: &str) -> Option<u32> {
     match code {
         "s" | "m" => Some(cs_thumb::DEFAULT_SIZE),
         "l" => Some(640),
@@ -280,7 +280,7 @@ fn size_for(code: &str) -> Option<u32> {
 
 /// Cache key for a file by location + size + modified time: a changed file
 /// gets a new thumbnail, an unchanged one is never decoded twice.
-fn cache_key(p: &Path, m: &std::fs::Metadata) -> String {
+pub(crate) fn cache_key(p: &Path, m: &std::fs::Metadata) -> String {
     let mut h = blake3::Hasher::new();
     h.update(b"fthumb1\0");
     h.update(p.as_os_str().as_encoded_bytes());

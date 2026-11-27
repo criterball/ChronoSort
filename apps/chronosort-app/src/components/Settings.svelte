@@ -2,6 +2,7 @@
   import { prefs, resetPrefs, THEMES, FONTS, SIZES } from "../lib/prefs.svelte.js";
   import AiModels from "./AiModels.svelte";
   import Portable from "./Portable.svelte";
+  import ThumbCache from "./ThumbCache.svelte";
 
   // Small colour previews (bg, surface, accent, text) — keep in sync with app.css.
   const SWATCH = {
@@ -54,6 +55,8 @@
   </div>
 
   <AiModels />
+
+  <ThumbCache />
 
   <Portable />
 

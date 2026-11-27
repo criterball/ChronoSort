@@ -125,6 +125,16 @@ export const editWatermark = (png, path) => invoke("edit_watermark", { png, path
 export const editSave = (mode, format, quality, name = null) => invoke("edit_save", { mode, format, quality, name });
 export const editFormats = () => invoke("edit_formats");
 export const imageHistogram = (id, edit) => invoke("image_histogram", { id, edit });
+// Lossless JPEG crop to a new file; remove information ("all" | "place") from photos.
+export const jpegLosslessCrop = (id, r) => invoke("jpeg_lossless_crop", { id, x: r.x, y: r.y, w: r.w, h: r.h });
+export const stripMeta = (ids, what) => invoke("strip_meta", { ids, what });
+// Thumbnail cache tools (progress: "cache-progress").
+export const thumbCacheInfo = () => invoke("thumb_cache_info");
+export const thumbCacheClear = () => invoke("thumb_cache_clear");
+export const thumbCacheTrim = (maxMb) => invoke("thumb_cache_trim", { maxMb });
+export const thumbCacheClearOld = () => invoke("thumb_cache_clear_old");
+export const thumbCachePrescan = (path, recursive, sizes) => invoke("thumb_cache_prescan", { path, recursive, sizes });
+export const thumbCacheCancel = () => invoke("thumb_cache_cancel");
 // Create: contact sheet / joined picture, PDF, ZIP (progress: "create-progress").
 export const createSizes = (ids) => invoke("create_sizes", { ids });
 export const createSheet = (ids, opts) => invoke("create_sheet", { ids, opts });
