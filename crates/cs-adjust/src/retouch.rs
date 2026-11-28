@@ -122,8 +122,8 @@ pub fn red_eye(img: &Image, eyes: &[Eye]) -> Result<Image, String> {
                 // The pupil's own grey from green and blue, then darkened.
                 let grey = (g + bl) * 0.5 * (1.0 - 0.7 * dark);
                 let nv = [grey, g.min(grey.max(g * (1.0 - 0.7 * dark))), bl.min(grey.max(bl * (1.0 - 0.7 * dark)))];
-                for c in 0..3 {
-                    b.v[i + c] += (nv[c] - b.v[i + c]) * m;
+                for (v, n) in b.v[i..i + 3].iter_mut().zip(nv) {
+                    *v += (n - *v) * m;
                 }
             }
         }

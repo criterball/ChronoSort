@@ -125,6 +125,7 @@ export const editWatermark = (png, path) => invoke("edit_watermark", { png, path
 export const editSave = (mode, format, quality, name = null) => invoke("edit_save", { mode, format, quality, name });
 export const editFormats = () => invoke("edit_formats");
 export const imageHistogram = (id, edit) => invoke("image_histogram", { id, edit });
+export const setWallpaper = (id, style) => invoke("set_wallpaper", { id, style });
 // Lossless JPEG crop to a new file; remove information ("all" | "place") from photos.
 export const jpegLosslessCrop = (id, r) => invoke("jpeg_lossless_crop", { id, x: r.x, y: r.y, w: r.w, h: r.h });
 export const stripMeta = (ids, what) => invoke("strip_meta", { ids, what });

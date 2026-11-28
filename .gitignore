@@ -39,3 +39,6 @@ node_modules/
 
 # Thumbnail cache / portable data next to a built ChronoSort.exe
 ChronoSortData/
+
+# Native-app test screenshots (local paths, test folders): kept private
+/docs/screenshots/native/

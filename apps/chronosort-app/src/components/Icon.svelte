@@ -31,6 +31,8 @@
   {:else if name === "histogram"}<path d="M3 20h18" /><path d="M5 20v-4M8 20v-9M11 20V6M14 20v-7M17 20v-11M20 20v-5" />
   {:else if name === "star"}<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
   {:else if name === "star-off"}<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" /><path d="M4 4l16 16" />
+  {:else if name === "print"}<path d="M7 8V3h10v5" /><rect x="3" y="8" width="18" height="9" rx="2" /><path d="M7 14h10v7H7z" /><path d="M17.5 11h.01" />
+  {:else if name === "wallpaper"}<rect x="2.5" y="3.5" width="19" height="13" rx="1.5" /><path d="M5 14l4.5-4.5 3 3 2-2L19 14" /><path d="M8 20.5h8M12 16.5v4" />
   {:else if name === "compare"}<rect x="2.5" y="4.5" width="8.5" height="15" rx="1.5" /><rect x="13" y="4.5" width="8.5" height="15" rx="1.5" /><path d="M5 15l2-3 2 3M15.5 15l2-3 2 3" />
   {:else if name === "tag"}<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.4 6.4a1.4 1.4 0 0 1-2 0z" /><circle cx="8.2" cy="8.2" r="1.6" />
   {:else if name === "undo"}<path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />

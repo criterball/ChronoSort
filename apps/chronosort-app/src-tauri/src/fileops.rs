@@ -48,6 +48,11 @@ pub enum Undo {
     },
     /// Top-level items: original place -> new place.
     Moved(Vec<(PathBuf, PathBuf)>),
+    /// The desktop wallpaper before ChronoSort changed it.
+    Wallpaper {
+        file: PathBuf,
+        style: String,
+    },
     /// A batch rename: its steps (undone like `Moved`) and how many names changed.
     RenamedMany {
         steps: Vec<(PathBuf, PathBuf)>,
@@ -470,6 +475,12 @@ pub(crate) fn undo_op(op: Undo) -> Result<String, String> {
             } else {
                 format!("{removed} copies removed.")
             })
+        }
+        Undo::Wallpaper { file, style } => {
+            let s = cs_platform::WallStyle::parse(&style).unwrap_or(cs_platform::WallStyle::Fill);
+            cs_platform::set_wallpaper(&file, s)
+                .map_err(|e| format!("The old wallpaper could not be put back: {e}"))?;
+            Ok("The previous wallpaper is back.".into())
         }
         Undo::RenamedMany { steps, names } => match undo_op(Undo::Moved(steps)) {
             Ok(_) => Ok(format!("{names} old names put back.")),

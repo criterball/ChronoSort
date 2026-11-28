@@ -143,6 +143,153 @@ User decisions: plain year folders (`2005/`). If the source has month folders, A
   - Small, not changed: after Undo on the done screen the heading still says "… was added to 4 photos" (the green "Undone" line is under it). Backup run IDs use UTC time (internal only).
 - dist/ChronoSort.exe rebuilt with these fixes (2026-11-21 evening).
 
+## 2026-11-27 late night: NEW DIRECTION — native Rust UI, no WebView2 (plan: research/03_native_ui.md)
+- User picked it after hearing what WebView2 does; user suggested ArtCraft/FilmCraft (storytold) for video playback.
+- Backup first (user asked): `D:\Claude_Code_Home\backups\ChronoSort_2026-11-27_tauri_webview\` (app = dist 15:11,
+  source incl. .git + uncommitted item 12, git bundle).
+- Step 1 DONE + click-tested (shots docs/screenshots/native/01-07, NASA test photos): `apps/chronosort-native` (egui fork + wgpu):
+  tree (Places + drives, lazy), grid S/M/L sharing ChronoSortData\cache with the Tauri app, keys (arrows, Enter,
+  Backspace, Alt+Left, mouse Back), viewer (preview then original, neighbours ahead, wheel zoom about the mouse,
+  drag, F/0 fit, 1 = 100 %, I info, Esc). Release exe 17 MB, ~200 MB RAM, no child processes; dist/ChronoSortNative.exe.
+  egui default fonts lack arrows / ✕ / ▶ (shown as boxes): plain words + painted shapes until craft-fonts is added.
+  Root Cargo.toml: winit patch. clippy -D warnings clean, 2 tests. NOT committed.
+- ChronoSort UI font DONE (user asked "build a font that has everything we need"): apps/chronosort-native/fonts/ —
+  Inter 4 (OFL) + 131 Tabler 3.50.0 icons (MIT) merged by build_font.py (fontTools 4.60.1 in toolspylibs), text
+  symbols ✓★▶⚠⚙🔒 … mapped; generated src/icons.rs; `ChronoSortNative.exe --icons` shows the sheet (shot 08).
+  Icons on Back/Up/Exit/Close, tree places + drives. Licences in disticenses. dist exe 17.9 MB (19:23).
+  Not covered: CJK, Arabic, Hebrew, Thai, Indic, colour emoji (file names in those scripts show boxes).
+- Viewer now like the Tauri one (user: "still in full screen view mode no menus left top right and bottom like it was"):
+  real full screen, 4 fly-outs at the edges (top strip, left picture menu, right information via new
+  cs_meta::exif_info, bottom nav+zoom bar), wheel = next/prev (MouseWheel events, 40-pt step), Ctrl+wheel = zoom,
+  PageUp/PageDown/Home/End, old keys (0/B, 1/A, 2-9, Shift+W/H, I), double-click closes, pointer hides after 2 s.
+  Edit items shown greyed out ("moving over next"). Click-tested (shots 11-21). dist 19:40. User: all photo names
+  are English, so no CJK/Arabic font is needed.
+- EDITING MOVED OVER (user: "go on work through all of it sequentially" — order: editing → video → other screens):
+  new UI-free crate crates/cs-app (edit.rs = old edit.rs as a Session object; fileops.rs = old undo engine with plain
+  API; exiftool.rs locator) — 12 tests incl. real lossless save + replace + Undo. Native: editor.rs (worker thread,
+  slider requests coalesced; tools crop/resize/straighten/canvas/DPI/colour+Auto/save/retouch/frame+watermark),
+  raster.rs (ab_glyph text in the ChronoSort font, shapes, text watermark PNG), viewer keys L R H V X T C E F Ctrl+R
+  Ctrl+S Ctrl+Z, unsaved-changes question, Ctrl+Z in the browser = file undo. All click-tested on copies
+  (temp
+ativedit_test): rotate, crop, Auto, save copy, undo, heal, draw box+arrow, Mat frame + text watermark
+  (saved 1018x638 with both). Fly-outs are Order::Middle so combo lists show above them.
+- TEST DRIVER (after a test run sent clicks + an "f" to the user's own window — told the user): never use real
+  mouse/keyboard again. CHRONOSORT_DRIVE=<file> feeds commands into the app's own window (drive.rs; helper
+  temp
+ativedrive.ps1: Start-Driven, Drive @(...) returns a state report, Shot). No real fullscreen in that mode.
+- VIEWER COMPLETE (nothing "coming soon" left): cs-app gained meta.rs (ExifTool read/write + backup + undo), privacy.rs
+  (lossless crop, strip info), wallpaper.rs, print.rs (layouts 1/2/4 per page, contact sheet 12 (3x4) and 24 (4x6) per
+  page with file names — user asked 2026-11-27 —, exact sizes with cut guides, captions, A4/Letter, 300 dpi pages,
+  own PDF writer). cs-platform/print.rs = Windows Print dialog + GDI (craft-print dropped: craft-i18n pins ICU 2.3,
+  clashes with the workspace's 2.4). Native: infopanel.rs (EXIF / All tags / Edit), wallpaper dialog (NOT applied in
+  tests — would change the user's desktop), printdlg.rs (preview, "this photo / all N in folder", Save as PDF, Print…
+  = real printer, NOT sent in tests). Picture fits beside an open tool panel. All driver-tested; dist 2026-11-27 late.
+- A1 DONE: video + sound in the viewer (cs-video/play.rs streams; cs-video/mf.rs = Windows Media Foundation, GPU decode,
+  2-3x faster: 4K HEVC 54 fps; also MTS/AVI/WMV; pure-Rust fallback, CHRONOSORT_NO_MF=1 forces it), player.rs (cpal,
+  sound = clock, seek, volume), control bar, Space/click pause. Fixed: video thumbnails need cs_thumb::video_helper_main()
+  at the start of main. Slideshow (slideshow.rs: settings card, fade/slide/zoom/mixed, captions, videos play/still/skip,
+  music via Music in player.rs with ducking, keep-awake, end card), options in ChronoSortDatasettingsslideshow.json
+  (settings.rs). Sound itself NOT heard in tests (silent rule) — user to listen.
+- A2 browser DONE (browser.rs: tree with favourites / only-this-folder, Thumbs S/M/L + Tiles + List + Details with sort columns,
+  multi-select Ctrl/Shift, right-click menus, new folder/rename/copy/cut/paste/move/delete bin+permanent/strip info,
+  job card with Stop, folder sample photos, prefs + last folder in ChronoSortDatasettingsrowser.json). Driver tested.
+- A3 batch DONE (cs-app/batch.rs port; batchdlg.rs F3 convert / F4 rename with live preview; tested rename+undo, 50% convert).
+- A4 create DONE (cs-app/create.rs port; createdlg.rs sheet/strip/PDF/ZIP, text via raster::sheet_layer; all 4 tested).
+  NOTE for driver tests: click coordinates are window-client points = screenshot y minus 31.
+## PAUSED 2026-11-28 (user: "time for a break, save progress and stop")
+- The user ASKED FOR the GitHub update (criterball/ChronoSort) + a release with the executables, marked
+  "experimental, use at your own risk". Work done so far, NOT yet committed/pushed:
+  - README.md: big "Experimental — use at your own risk" banner at the top, a "Two apps" section
+    (ChronoSort.exe full app / ChronoSortNative.exe preview) and "built with the help of Claude".
+  - User rule: credit only Claude and the owner account (checked: all commits are criterball).
+  - .gitignore: /docs/screenshots/native/ (96 test shots with local paths: keep private).
+  - cs-adjust: 3 clippy loop lints fixed (effects.rs, retouch.rs, lib.rs); cargo fmt --all run.
+- TO DO on resume, in order:
+  1. bash scripts/check.sh (it was stopped before finishing; it takes > 10 min, so run it in the background).
+  2. Rebuild BOTH apps from current source (dist/ChronoSort.exe is from 15:11 on 11-27, without item 12):
+     UI npm build + cargo build --release -p chronosort-app --features chronosort-app/custom-protocol, -p chronosort,
+     -p chronosort-native; copy to dist. Update dist/README.txt (native app line + experimental warning).
+  3. Commit as criterball (Co-Authored-By Claude trailer), push with the gh credential helper after
+     `gh auth switch --user criterball` (switch back afterwards).
+  4. Zip WITHOUT dist/ChronoSortData (personal cache) and WITHOUT WebView2 profile: ChronoSort.exe,
+     WebView2Loader.dll, ChronoSortNative.exe, chronosort-cli.exe, exiftool/, licenses/, LICENSE, README.txt.
+     First GitHub release (no tags yet): suggest v0.1.0, marked pre-release, notes start with the
+     experimental / use-at-your-own-risk warning.
+
+## 2026-11-28: A5 DONE in the native app (stars, tag, filters, compare, histogram, magnifier)
+- marks.rs: stars read on a worker thread (cs_app::rating::stars_of, parts of 200, generation drop); tag list =
+  ChronoSortData	agged.json. browse::Listing has `all` + filtered `entries`; sort_listing filters (stars / tag /
+  name, this session only; name filter cleared on a new folder) and sorts (new SortBy::Stars). Filter row under the
+  top bar: Show [Any stars … ★★★★★ only / No stars yet / Tagged], "Names containing…", Show all, Stars 1–5 buttons,
+  Tag, Compare. Status bar: "N not shown (filter)". Stars + tag painted on thumbs / tiles / list / details (Stars column).
+- Browser keys 0–5 (also Ctrl), Q tag, P compare; right-click: Stars row, Tag / Remove the tag, Compare N.
+  Rating = browser job (no texture reset: Job.fresh_pictures=false), one Undo for the batch.
+- compare.rs: 2–4 panes, Tauri Compare.svelte maths (z relative to fit, cx/cy), together on/off (S), wheel zoom at
+  pointer, drag, double-click 100 %/fit, 0/1/+/−/Tab, original loaded when preview pixels run out, most pixels /
+  biggest file hints, Show in Explorer. Not yet: "Keep this one" (needs A8 duplicates).
+- Viewer: Ctrl+0–5 stars (plain digits still zoom), Q tag, Ctrl+H histogram (histo.rs; computed by the loader for
+  1280 previews; while editing it shows the photo before the changes), magnifier = hold left button on a fitted
+  photo (square lens, 2–8×, uses the original when loaded). Stars/tag in the bottom-left caption.
+- Driver-tested on temp
+ative5_test (NASA copies; script temp
+ative5_test.ps1): rate 3, rate 5 ×3, Ctrl+Z,
+  tag/untag, compare 100 % + unlink, viewer Ctrl+4 + Q, name filter, Tagged filter. Magnifier NOT driver-tested
+  (needs a held button) — user to try. Driver note: digit keys are "key 3", not "key Num3".
+- Fixed: star filter list was cut off (ComboBox height 400). clippy --no-deps clean (also fixed raster.rs loop lint);
+  `clippy` WITHOUT --no-deps fails in cs-adjust (3 needless_range_loop, untouched crate, newer clippy).
+  tests: native 8. dist/ChronoSortNative.exe 2026-11-28 09:13 (34.4 MB). NOTHING committed.
+- Release size (measured): native exe + exiftool + licences zipped = 23.5 MB (exe alone 12.7 MB zipped).
+- NEXT: A6 Home tiles, A7 Sort into years, A8 duplicates (+ Compare "Keep this one"), A9 people, A10 places,
+  A11 Ask the AI, A12 Settings, A13 Help, A14 USB maker; then group B.
+
+## PAUSED 2026-11-27 late night (user: "save progress and stop for today")
+- Group A done so far: A1 video+slideshow, A2 browser, A3 batch, A4 create. dist/ChronoSortNative.exe 22:51 (30.6 MB).
+  clippy -D warnings clean for chronosort-native, cs-app, cs-platform, cs-video; tests pass (cs-app 33, cs-platform 22,
+  native 4). NOTHING committed (since a2546f9).
+- A5 IN PROGRESS: cs-app/rating.rs ported (stars_of, rate_files, tagged_set / set_tagged with <data>/tagged.json) +
+  tests pass. NOT yet in the UI: stars + tag (Ctrl+0-5, Q) in browser / viewer, filters, compare side by side (P),
+  histogram (Ctrl+H) + magnifier, remove info for many (done in A2).
+- Then A6 Home tiles, A7 Sort into years, A8 duplicates, A9 people, A10 places, A11 Ask the AI, A12 Settings, A13 Help,
+  A14 portable USB maker; then group B (all data into ChronoSortData, 6 GB AppData move).
+- Test driver: temp
+ativedrive.ps1 (CS_EXE env picks debug/release); click y = screenshot y - 31.
+- NEXT: step 2 = video + sound playback in the viewer (FilmCraft approach), then slideshow with music.
+
+## PAUSED 2026-11-27 night (user: "save progress and stop, will talk later tonight")
+- **NEW REQUIREMENT (user, 2026-11-27):** ChronoSort is ALWAYS portable — no installer, never Program Files — and
+  EVERYTHING lives inside the ChronoSort folder: AI engine, models, people.db, settings, cache AND WebView2.
+  Today in normal mode models/tools/people/logs go to %APPDATA%\org.chronosort.app (6.0 GB on this PC) and the
+  WebView2 profile to %LOCALAPPDATA%\org.chronosort.app; only portable.txt (or the new thumbnail rule) keeps them
+  beside the exe; WebView2 itself is the system Evergreen runtime.
+- **The user wants to DISCUSS options before any change.** Options to present (nothing built yet):
+  1. WebView2 *Fixed Version* runtime shipped in a sub-folder (Tauri `webviewInstallMode: fixedRuntime`, path
+     relative to the exe; ~150-200 MB; redistributable; ChronoSort must ship runtime updates itself for security).
+  2. Bundle Chromium via CEF instead (similar size, more work, also needs self-updating).
+  3. Replace the web UI with a native Rust UI (egui / iced / Slint): no browser engine at all, smallest and fully
+     portable, but the whole Svelte UI (~35 components) would have to be rewritten.
+  4. "Rewrite WebView2 in Rust" is not realistic (it is a whole Chromium browser); Servo is not ready for this.
+  Plus: make portable the only mode (data_dir = <exe>\ChronoSortData always; refuse/explain if the folder is
+  read-only), WebView2 user data in ChronoSortData\webview always, and a one-time move of the old AppData data
+  (6 GB) with progress + verify. Linux/macOS later: WebKitGTK / WKWebView are system parts (decide separately).
+- Uncommitted: item 12 print + wallpaper (see below). A check.sh + release build was started just before the pause.
+- Afterwards: show the user ALL remaining goals and nice-to-haves (they asked): 12 rest (e-mail, screen capture,
+  scanner, camera/card import), 14 (dual monitor, ICC), Linux/macOS builds, real-USB-on-another-PC test, move-mode
+  test with a real Recycle Bin, tags following moves, child age test set, GitHub release (user said "not yet").
+
+## 2026-11-27 (evening): pushed a2546f9 (13 + 15); then 12 print + wallpaper (user picked only these two of 12)
+- **Print** (`PrintDialog.svelte`; Ctrl+P in browser and viewer, right-click, viewer left panel): one per page (named
+  CSS page `land` for wide photos), two / four per page, exact sizes 9×13 … 20×30 cm (inline-blocks that never split;
+  dashed cut guides as border — an outline leaked onto the previous page), fit / fill, captions, A4 / Letter, margin.
+  Pages are a `.print-portal` appended to body; @media print hides everything else; then window.print() (Windows
+  print dialog); cleaned up on `afterprint`. App swallows Ctrl+P so the UI itself is never printed. Tested with
+  `node scripts/cdp.mjs 9333 pdf OUT.pdf` (new Page.printToPDF command) after stubbing window.print: all layouts OK.
+- **Wallpaper** (`WallpaperDialog.svelte`, `desktop.rs`, `cs-platform/wallpaper.rs` SystemParametersInfoW +
+  HKCU\Control Panel\Desktop WallpaperStyle/TileWallpaper): fill/fit/stretch/center/tile/span; the photo is saved
+  upright as JPEG (≤7680 px) in `<data>/wallpaper/` (keeps the new + previous copy); `Undo::Wallpaper` restores the
+  previous file + style. Tested: `cargo test -p cs-platform -- --ignored wallpaper_same` re-applies the user's
+  current wallpaper unchanged (it is FastStone's PNG in AppData). The full "set a new one" flow was NOT run on the
+  user's desktop (outside the sandbox) — the dialog opens and cancels fine.
+
 ## 2026-11-27 (late afternoon): pushed 83c97e7 (items 8-11); then 13 and 15 (not committed)
 - **15 Thumbnail cache** (user: "the cache thumbnails are stored alongside the app so it's portable"): `cache_dir`
   is now `<exe dir>\ChronoSortData\cache` whenever that folder is writable (portable or not; AppData cache only as a

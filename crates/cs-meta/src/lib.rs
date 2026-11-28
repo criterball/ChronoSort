@@ -116,6 +116,13 @@ pub fn raw_preview(path: &std::path::Path) -> Option<Vec<u8>> {
     preview::raw_preview(path, TIFF_EXIF_LIMIT)
 }
 
+/// Camera facts (make, model, software, dates) of one image file, for an information panel.
+/// `None` when the file has no readable EXIF.
+pub fn exif_info(path: &std::path::Path, format: Format) -> Option<ExifInfo> {
+    let mut f = File::open(path).ok()?;
+    exif::read(&mut f, format, TIFF_EXIF_LIMIT).ok().flatten()
+}
+
 /// EXIF orientation (1–8) and embedded JPEG thumbnail of an image file.
 pub fn orientation_and_thumbnail(path: &std::path::Path, format: Format) -> (Option<u16>, Option<Vec<u8>>) {
     match File::open(path) {

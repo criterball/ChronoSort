@@ -1,5 +1,8 @@
 # ChronoSort
 
+> ⚠️ **Experimental software — use at your own risk.** ChronoSort is under heavy development. Always keep a
+> backup of your photos and videos before using it. There is no warranty of any kind (see the GPL licence).
+
 Private, local sorter that puts photos and videos into **year folders**, with safety as the first priority. Your photos and videos never leave your PC.
 
 - **Never damages originals.** Copy mode by default. Every copy is hash-verified, timestamps are preserved, nothing is ever overwritten, and every action is logged so it can be undone.
@@ -21,6 +24,15 @@ Private, local sorter that puts photos and videos into **year folders**, with sa
 <sub>Screenshot photos: public-domain NASA images, see [credits](docs/screenshots/browser/CREDITS.md).</sub>
 
 Experimental software: **use at your own risk**, and keep a backup of your photos.
+
+### Two apps while ChronoSort moves to a native UI
+- `ChronoSort.exe` — the full app (sorting, duplicates, people, places, AI) with a WebView2 window.
+- `ChronoSortNative.exe` — **preview** of the new native Rust app (egui, no WebView2, fully portable: everything
+  it keeps stays in `ChronoSortData` beside it). Today it has the file browser, viewer and editing, video and
+  slideshow, batch convert / rename, contact sheets / PDF / ZIP, printing, wallpaper, stars, tags, filters,
+  compare side by side, histogram and magnifier. Sorting, duplicates, people, places and the AI come next.
+
+ChronoSort is built with the help of Claude (Anthropic's AI assistant).
 
 License: **GPL-3.0-or-later**. Anyone sharing ChronoSort or a modified version must keep it open.
 

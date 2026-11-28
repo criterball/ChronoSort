@@ -162,8 +162,8 @@ impl Layer {
                 }
                 let i = (sy as usize * self.w + sx as usize) * 4;
                 let wgt = wx * wy;
-                for c in 0..4 {
-                    out[c] += self.v[i + c] * wgt;
+                for (o, &v) in out.iter_mut().zip(&self.v[i..i + 4]) {
+                    *o += v * wgt;
                 }
             }
         }

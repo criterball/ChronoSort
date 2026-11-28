@@ -7,6 +7,8 @@
   import Slideshow from "./Slideshow.svelte";
   import BatchDialog from "./BatchDialog.svelte";
   import CreateDialog from "./CreateDialog.svelte";
+  import PrintDialog from "./PrintDialog.svelte";
+  import WallpaperDialog from "./WallpaperDialog.svelte";
   import Compare from "./Compare.svelte";
   import {
     browseRoots, listDir, folderSamples, revealItem, fthumbUrl, formatBytes, plural, confirmBox, openFolder, pickFolder,
@@ -31,6 +33,8 @@
   let slideshow = $state(null); // { items, start }
   let batch = $state(null); // { items, tab }
   let create = $state(null); // { items, tab }
+  let printing = $state(null); // items to print
+  let wallpaper = $state(null); // { id, name }
   let marks = $state({}); // file id -> { rating (0–5, null = not a photo), tagged }
   let rateFilter = $state("any"); // any | "1".."5" (at least) | none | tagged  (this session only)
   let failedThumbs = $state(new Set());
@@ -361,6 +365,13 @@
     await quietRefresh();
   }
 
+  // Print the selected photos (or the one under the mouse).
+  function startPrint() {
+    const list = selEntries.filter((x) => MEDIA.has(x.kind));
+    if (!list.length) return say("Select one or more photos to print (Ctrl+P).");
+    printing = list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, modified: x.modified }));
+  }
+
   // ---------- favourite folders and "show only this folder" ----------
   const isFav = (p) => bprefs.favs.some((f) => samePath(f.path, p, sep));
   function toggleFav(p) {
@@ -430,7 +441,7 @@
   }
 
   function onAreaKey(ev) {
-    if (menu || viewer || compare || slideshow || batch || create) return;
+    if (menu || viewer || compare || slideshow || batch || create || printing || wallpaper) return;
     const k = ev.key;
     const ctrl = ev.ctrlKey || ev.metaKey;
     if (k === "ArrowRight" && bprefs.view !== "details") moveSel(1, ev);
@@ -459,10 +470,11 @@
   }
 
   function onWindowKey(ev) {
-    if (!active || menu || viewer || compare || slideshow || batch || create || document.querySelector("dialog[open]")) return;
+    if (!active || menu || viewer || compare || slideshow || batch || create || printing || wallpaper || document.querySelector("dialog[open]")) return;
     if (ev.key === "F5") { ev.preventDefault(); refresh(); }
     else if (ev.key === "F3") { ev.preventDefault(); startBatch("convert"); }
     else if ((ev.ctrlKey || ev.metaKey) && (ev.key === "d" || ev.key === "D") && browser.path) { ev.preventDefault(); toggleFav(browser.path); }
+    else if ((ev.ctrlKey || ev.metaKey) && (ev.key === "p" || ev.key === "P")) { ev.preventDefault(); startPrint(); }
     else if (ev.key === "F4") { ev.preventDefault(); startBatch("rename"); }
     else if (ev.altKey && ev.key === "ArrowLeft") { ev.preventDefault(); goBack(); }
     else if (ev.altKey && ev.key === "ArrowRight") { ev.preventDefault(); goForward(); }
@@ -543,6 +555,9 @@
       items.push({ label: nf > 1 ? `Rename these ${nf}…` : "Batch rename…", icon: "list", key: "F4", action: () => startBatch("rename") });
       items.push({ label: "Contact sheet, PDF or ZIP…", icon: "thumbs", action: () => startCreate(MEDIA.has(e.kind) ? "sheet" : "zip") });
       if (MEDIA.has(e.kind)) {
+        const np = selEntries.filter((x) => MEDIA.has(x.kind)).length;
+        items.push({ label: np > 1 ? `Print these ${np}…` : "Print…", icon: "print", key: "Ctrl+P", action: startPrint });
+        if (e.kind !== "video") items.push({ label: "Set as desktop wallpaper…", icon: "wallpaper", action: () => (wallpaper = { id: e.id, name: e.name }) });
         items.push({ label: "Remove the place (GPS)…", icon: "pin", action: () => removeInfo("place") });
         items.push({ label: "Remove all photo information…", icon: "close", action: () => removeInfo("all") });
       }
@@ -1131,6 +1146,8 @@
     </div>
   </div>
 {/if}
+{#if printing}<PrintDialog items={printing} onclose={() => { printing = null; area?.focus(); }} />{/if}
+{#if wallpaper}<WallpaperDialog item={wallpaper} onclose={async (msg) => { wallpaper = null; if (msg) { say(msg); undoLabel = await lastUndo().catch(() => undoLabel); } area?.focus(); }} />{/if}
 {#if create}<CreateDialog items={create.items} tab={create.tab} folder={nameOf(browser.path)} onclose={async (changed, name) => {
   create = null;
   if (changed) await refreshSelect(name ? [joinIn(browser.path, name, sep)] : []);

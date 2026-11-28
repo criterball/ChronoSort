@@ -6,6 +6,8 @@
   import RetouchPanel from "./RetouchPanel.svelte";
   import EffectsPanel from "./EffectsPanel.svelte";
   import HistogramBox from "./HistogramBox.svelte";
+  import PrintDialog from "./PrintDialog.svelte";
+  import WallpaperDialog from "./WallpaperDialog.svelte";
   import RetouchOverlay from "./RetouchOverlay.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
@@ -48,6 +50,8 @@
     showHisto = !showHisto;
     try { localStorage.setItem("chronosort.viewer.histogram", showHisto ? "1" : "0"); } catch { /* fine */ }
   }
+  let printDlg = $state(null); // items to print
+  let wallDlg = $state(null); // { id, name }
   let lens = $state(null); // magnifier: { x, y, bx, by, bw, bh } while the mouse button is held on a fitted photo
   let straight = $state(null); // { angle, frame: {x,y,w,h}, draw, line: {x1,y1,x2,y2} | null }
   let canvasDlg = $state(null); // { w, h, anchor, color }
@@ -599,6 +603,7 @@
     else if (ctrl && (k === "z" || k === "Z")) stepBack();
     else if (ctrl && /^[0-5]$/.test(k)) rateCur(+k);
     else if (ctrl && (k === "h" || k === "H")) toggleHisto();
+    else if (ctrl && (k === "p" || k === "P")) openPrint();
     else if (ctrl) return;
     else if (k === "q" || k === "Q") tagCur();
     else if (k === "ArrowRight" || k === "PageDown" || k === " ") next();
@@ -658,6 +663,12 @@
     const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", mv);
     window.addEventListener("pointerup", up);
+  }
+
+  function openPrint() {
+    if (!cur) return;
+    if (dirty) return say("Save the edited picture first (Ctrl+S); printing uses the saved file.");
+    printDlg = [{ id: cur.id, name: cur.name, kind: cur.kind, modified: cur.modified }];
   }
 
   // Magnifier: while the left button is held on a fitted photo, a round lens shows
@@ -730,6 +741,8 @@
     </div>
   {/if}
   {#if cur && showHisto && !failed}<HistogramBox id={cur.id} edit={!!edit} version={edit?.version ?? 0} onclose={toggleHisto} />{/if}
+  {#if printDlg}<PrintDialog items={printDlg} onclose={() => { printDlg = null; el?.focus(); }} />{/if}
+  {#if wallDlg}<WallpaperDialog item={wallDlg} onclose={(msg) => { wallDlg = null; if (msg) { say(msg); onchanged?.(); } el?.focus(); }} />{/if}
   {#if lens}
     <div class="lens" style="left:{lens.x - LENS / 2}px; top:{lens.y - LENS / 2}px; width:{LENS}px; height:{LENS}px;
       background-image:url('{lensSrc}'); background-size:{lens.bw}px {lens.bh}px; background-position:{lens.bx}px {lens.by}px">
@@ -897,6 +910,8 @@
       <button onclick={dropEdits} disabled={!dirty}><Icon name="close" size={16} /> Throw away changes</button>
       <h3>File</h3>
       <button onclick={() => cur && revealItem(cur.id)}><Icon name="explorer" size={16} /> Show in Explorer</button>
+      <button onclick={openPrint}><Icon name="print" size={16} /> Print… <kbd>Ctrl+P</kbd></button>
+      {#if cur?.kind !== "video"}<button onclick={() => cur && (wallDlg = { id: cur.id, name: cur.name })}><Icon name="wallpaper" size={16} /> Set as desktop wallpaper…</button>{/if}
       <button onclick={() => (pinned = "right")}><Icon name="details" size={16} /> Information (EXIF) <kbd>I</kbd></button>
       <button onclick={() => close()}><Icon name="close" size={16} /> Back to the browser <kbd>Esc</kbd></button>
     {/if}

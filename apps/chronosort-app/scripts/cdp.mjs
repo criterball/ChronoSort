@@ -35,6 +35,12 @@ if (cmd === "eval") {
     returnByValue: true,
   });
   console.log(r.result?.value);
+} else if (cmd === "pdf") {
+  // Print the page to a PDF (as the printer would get it): node scripts/cdp.mjs PORT pdf OUT.pdf
+  const r = await send("Page.printToPDF", { preferCSSPageSize: true, printBackground: true });
+  if (!r.data) { console.log(JSON.stringify(r)); process.exit(1); }
+  (await import("node:fs")).writeFileSync(arg, Buffer.from(r.data, "base64"));
+  console.log("saved", arg);
 } else if (cmd === "console") {
   await send("Runtime.enable");
   await send("Log.enable");

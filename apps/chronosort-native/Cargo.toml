@@ -1,0 +1,34 @@
+[package]
+name = "chronosort-native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ChronoSort with a native Rust UI (egui): no WebView2, no browser engine, fully portable."
+
+[[bin]]
+name = "ChronoSortNative"
+path = "src/main.rs"
+
+[dependencies]
+# egui / eframe from the storytold fork, the same commit craft-libs 77c7c62 builds on, so craft-ui widgets
+# can be added later without a second egui. wgpu renderer; no persistence (nothing written to AppData).
+eframe = { git = "https://github.com/storytold/egui.git", rev = "8a3c5ecb29ab8679d57035f2cb51d7ec8a5c080f", default-features = false, features = ["wgpu", "default_fonts", "accesskit"] }
+egui = { git = "https://github.com/storytold/egui.git", rev = "8a3c5ecb29ab8679d57035f2cb51d7ec8a5c080f" }
+blake3 = "1.8.7"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+ab_glyph = "0.2.29"
+rfd = "0.15.3"
+cpal = "0.16.0"
+cs-video = { path = "../../crates/cs-video" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+cs-platform = { path = "../../crates/cs-platform" }
+cs-scan = { path = "../../crates/cs-scan" }
+cs-adjust = { path = "../../crates/cs-adjust" }
+cs-app = { path = "../../crates/cs-app" }
+cs-meta = { path = "../../crates/cs-meta" }
+cs-model = { path = "../../crates/cs-model" }
+cs-thumb = { path = "../../crates/cs-thumb" }
+
+[lints]
+workspace = true

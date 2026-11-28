@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/chronosort-cli", "apps/chronosort-app/src-tauri"]
+members = ["crates/*", "apps/chronosort-cli", "apps/chronosort-app/src-tauri", "apps/chronosort-native"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,3 +18,8 @@ lto = "thin"
 codegen-units = 1
 # No debug symbols in release builds: ChronoSort.exe about half the size.
 strip = true
+
+# The egui fork (chronosort-native) builds on storytold's winit fork, like craft-libs does.
+# Tauri uses tao, not winit, so the old app is not affected.
+[patch.crates-io]
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }

@@ -16,10 +16,12 @@ mod awake;
 mod child;
 mod gpu;
 mod memory;
+pub mod print;
 mod recycle;
 mod rename;
 mod space;
 mod volumes;
+mod wallpaper;
 
 pub use awake::{is_awake, keep_awake};
 pub use child::{ChildGuard, end_with_us, prepare_child};
@@ -29,6 +31,7 @@ pub use recycle::{BinStatus, recycle_bin};
 pub use rename::rename_no_replace;
 pub use space::free_space;
 pub use volumes::{KnownFolder, Volume, VolumeKind, known_folders, volumes};
+pub use wallpaper::{WallStyle, current_wallpaper, set_wallpaper};
 
 /// Timestamps of a file as read from the filesystem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +138,25 @@ pub struct PlatformInfo {
 
 pub fn platform_info() -> PlatformInfo {
     PlatformInfo { os: std::env::consts::OS, arch: std::env::consts::ARCH, can_set_created: CAN_SET_CREATED }
+}
+
+/// The PC's offset from UTC right now, in minutes (east positive; summer time included).
+pub fn local_utc_offset_min() -> i32 {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
+        // SAFETY: plain data, filled by the call.
+        let mut tz: TIME_ZONE_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: valid pointer to a local.
+        let kind = unsafe { GetTimeZoneInformation(&mut tz) };
+        // 2 = daylight saving time is in effect now.
+        let extra = if kind == 2 { tz.DaylightBias } else { tz.StandardBias };
+        -(tz.Bias + extra)
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
 }
 
 #[cfg(test)]

@@ -11,6 +11,10 @@
 //! process with a time limit (see cs-thumb), and here every size is capped:
 //! picture size, packet size and how many packets are decoded.
 
+#[cfg(windows)]
+mod mf;
+pub mod play;
+
 use craft_media::ByteSource;
 use craft_media::isobmff::{self, TrackKind};
 use craft_video::TrackDecoder;
@@ -36,7 +40,7 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-fn err(what: &str, x: impl std::fmt::Display) -> Error {
+pub(crate) fn err(what: &str, x: impl std::fmt::Display) -> Error {
     Error(format!("{what}: {x}"))
 }
 
@@ -116,7 +120,7 @@ fn sample(p: &Plane, x: u32, y: u32) -> f64 {
 
 /// Kr, Kb of the colour matrix (ITU-T H.273 code points); unsignalled = BT.709
 /// for HD and bigger, BT.601 below.
-fn matrix(code: u8, height: u32) -> (f64, f64) {
+pub(crate) fn matrix(code: u8, height: u32) -> (f64, f64) {
     match code {
         1 => (0.2126, 0.0722),
         5 | 6 => (0.299, 0.114),

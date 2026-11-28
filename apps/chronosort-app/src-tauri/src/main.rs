@@ -18,6 +18,7 @@ use tauri::{Emitter, Manager, State};
 mod batch;
 mod browse;
 mod create;
+mod desktop;
 mod edit;
 mod fileops;
 mod histogram;
@@ -1077,6 +1078,7 @@ fn main() {
             edit::edit_set_dpi,
             edit::edit_effects,
             histogram::image_histogram,
+            desktop::set_wallpaper,
             privacy::jpeg_lossless_crop,
             privacy::strip_meta,
             thumbcache::thumb_cache_info,

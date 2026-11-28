@@ -575,8 +575,8 @@ fn dehaze(px: &mut Px, d: f32) {
     idx.select_nth_unstable_by(n - 1, |x, y| soft.v[*y].total_cmp(&soft.v[*x]));
     let mut air = [0.0f32; 3];
     for &i in &idx[..n] {
-        for c in 0..3 {
-            air[c] += px.p[i][c] / n as f32;
+        for (a, &v) in air.iter_mut().zip(&px.p[i][..3]) {
+            *a += v / n as f32;
         }
     }
     let amax = air[0].max(air[1]).max(air[2]).max(1e-3);
